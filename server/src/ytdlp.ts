@@ -6,6 +6,7 @@ export interface MediaInfo {
   id: string;
   extractor_key: string;
   webpage_url: string;
+  entries?: PlaylistEntry[];
   title: string;
   track?: string;
   artist?: string;
@@ -14,6 +15,17 @@ export interface MediaInfo {
   uploader?: string;
   channel?: string;
   duration?: number;
+}
+
+/** Item de playlist com --flat-playlist: só os dados básicos, sem abrir cada vídeo. */
+export interface PlaylistEntry {
+  id: string;
+  ie_key?: string;
+  url: string;
+  title?: string;
+  channel?: string;
+  uploader?: string;
+  duration?: number | null;
 }
 
 function run(args: string[], onLine?: (line: string) => void): Promise<string> {
@@ -44,9 +56,27 @@ function lastErrorLine(stderr: string): string | undefined {
   return lines.findLast((l) => l.startsWith('ERROR')) ?? lines.at(-1);
 }
 
+/**
+ * Metadados de um vídeo ou de uma playlist (_type === 'playlist', com `entries`).
+ * URLs de vídeo dentro de playlist (watch?v=...&list=...) contam como vídeo.
+ */
 export async function fetchInfo(url: string): Promise<MediaInfo> {
-  const json = await run(['-J', '--no-playlist', '--no-warnings', url]);
+  const json = await run(['-J', '--flat-playlist', '--no-playlist', '--no-warnings', url]);
   return JSON.parse(json) as MediaInfo;
+}
+
+/** Converte um item de playlist no formato de vídeo; null se privado/removido. */
+export function entryToInfo(entry: PlaylistEntry): MediaInfo | null {
+  if (!entry.id || !entry.title || /^\[(private|deleted) video\]$/i.test(entry.title)) return null;
+  return {
+    id: entry.id,
+    extractor_key: entry.ie_key ?? 'Youtube',
+    webpage_url: entry.url,
+    title: entry.title,
+    channel: entry.channel,
+    uploader: entry.uploader,
+    duration: entry.duration ?? undefined,
+  };
 }
 
 /** Baixa só o áudio como .m4a + capa .jpg em MEDIA_DIR/<basename>.* */
@@ -84,7 +114,10 @@ function cleanTitle(title: string, artist: string | undefined) {
     .trim();
   if (artist) {
     const escaped = artist.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    t = t.replace(new RegExp(`^${escaped}\\s*[-–—]\\s*|\\s*[-–—]\\s*${escaped}$`, 'i'), '').trim();
+    // "Artista - Música", "Música - Artista" e "Música - Artista (Álbum)"
+    t = t
+      .replace(new RegExp(`^${escaped}\\s*[-–—]\\s*|\\s*[-–—]\\s*${escaped}(\\s*[([][^)\\]]*[)\\]])*$`, 'i'), '')
+      .trim();
   }
   return t || title;
 }

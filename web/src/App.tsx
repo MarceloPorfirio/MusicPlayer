@@ -63,7 +63,7 @@ export function App() {
       <main className="content">
         {view.kind === 'library' && (
           <>
-            <AddTrackForm onAdded={loadTracks} />
+            <AddTrackForm onAdded={() => void Promise.all([loadTracks(), loadPlaylists()])} />
             {tracks.length > 5 && (
               <input
                 className="search"

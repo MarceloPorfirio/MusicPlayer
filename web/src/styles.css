@@ -94,7 +94,9 @@ input:focus { outline: none; border-color: var(--accent); }
 
 .add-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .add-form input { flex: 1; }
-.add-form .error { flex-basis: 100%; margin: 0; }
+.add-form .error,
+.add-form .success { flex-basis: 100%; margin: 0; }
+.success { color: var(--accent); }
 
 .search { width: 100%; margin-bottom: 12px; }
 

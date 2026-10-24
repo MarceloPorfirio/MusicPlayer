@@ -28,6 +28,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS playlists (
     id          INTEGER PRIMARY KEY,
     name        TEXT NOT NULL,
+    source_id   TEXT, -- playlist de origem quando importada (ex.: YoutubeTab:PL...)
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -38,6 +39,13 @@ db.exec(`
     PRIMARY KEY (playlist_id, track_id)
   );
 `);
+
+// Migrações de bancos criados antes da coluna existir.
+const playlistCols = db.prepare('PRAGMA table_info(playlists)').all() as unknown as { name: string }[];
+if (!playlistCols.some((c) => c.name === 'source_id')) {
+  db.exec('ALTER TABLE playlists ADD COLUMN source_id TEXT');
+}
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS playlists_source_id ON playlists(source_id)');
 
 export type TrackStatus = 'pending' | 'downloading' | 'ready' | 'error';
 
@@ -59,5 +67,6 @@ export interface TrackRow {
 export interface PlaylistRow {
   id: number;
   name: string;
+  source_id: string | null;
   created_at: string;
 }

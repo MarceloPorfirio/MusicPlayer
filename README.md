@@ -55,7 +55,7 @@ O service worker (e, portanto, instalar como app) só funciona em `localhost` ou
 | Método | Rota                                  | Descrição                           |
 | ------ | ------------------------------------- | ----------------------------------- |
 | GET    | `/api/tracks`                         | Lista a biblioteca                  |
-| POST   | `/api/tracks` `{ url }`               | Adiciona e enfileira o download     |
+| POST   | `/api/import` `{ url }`               | Vídeo → faixa; playlist → playlist com todas as faixas (reimportar sincroniza) |
 | PATCH  | `/api/tracks/:id`                     | Edita título/artista/álbum          |
 | POST   | `/api/tracks/:id/retry`               | Tenta baixar de novo                |
 | DELETE | `/api/tracks/:id`                     | Remove faixa e arquivos             |

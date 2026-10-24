@@ -2,9 +2,9 @@ import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { MEDIA_DIR } from '../config.js';
-import { db, type TrackRow } from '../db.js';
+import { db, type PlaylistRow, type TrackRow } from '../db.js';
 import { enqueue, progress } from '../downloads.js';
-import { describe, fetchInfo } from '../ytdlp.js';
+import { describe, entryToInfo, fetchInfo, type MediaInfo } from '../ytdlp.js';
 
 export function toTrack(row: TrackRow) {
   return {
@@ -26,6 +26,26 @@ function getTrack(id: number) {
   return db.prepare('SELECT * FROM tracks WHERE id = ?').get(id) as TrackRow | undefined;
 }
 
+/**
+ * Cadastra a faixa ou reaproveita a existente. `download` indica se ela precisa ir
+ * para a fila (nova ou com erro) — quem chama enfileira, depois de commitar.
+ */
+function addTrack(info: MediaInfo): { id: number; created: boolean; download: boolean } {
+  const meta = describe(info);
+  const existing = db.prepare('SELECT id, status FROM tracks WHERE source_id = ?').get(meta.sourceId) as
+    | Pick<TrackRow, 'id' | 'status'>
+    | undefined;
+  if (existing) {
+    return { id: existing.id, created: false, download: existing.status === 'error' };
+  }
+  const { lastInsertRowid } = db
+    .prepare(
+      'INSERT INTO tracks (source_id, source_url, title, artist, album, duration) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+    .run(meta.sourceId, meta.sourceUrl, meta.title, meta.artist, meta.album, meta.duration);
+  return { id: Number(lastInsertRowid), created: true, download: true };
+}
+
 type IdParams = { Params: { id: string } };
 
 export async function trackRoutes(app: FastifyInstance) {
@@ -34,7 +54,8 @@ export async function trackRoutes(app: FastifyInstance) {
     return rows.map(toTrack);
   });
 
-  app.post<{ Body: { url?: string } }>('/api/tracks', async (req, reply) => {
+  /** Vídeo vira faixa; playlist vira playlist com todas as faixas (reimportar sincroniza). */
+  app.post<{ Body: { url?: string } }>('/api/import', async (req, reply) => {
     const url = req.body?.url?.trim();
     if (!url || !URL.canParse(url)) {
       return reply.code(400).send({ error: 'Informe uma URL válida.' });
@@ -46,27 +67,60 @@ export async function trackRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(422).send({ error: (err as Error).message });
     }
-    if (info._type === 'playlist') {
-      return reply.code(422).send({ error: 'URLs de playlist ainda não são suportadas.' });
+
+    if (info._type !== 'playlist') {
+      const { id, created, download } = addTrack(info);
+      if (download) enqueue(id);
+      return reply.code(created ? 201 : 200).send({ kind: 'track', track: toTrack(getTrack(id)!) });
     }
 
-    const meta = describe(info);
-    const existing = db.prepare('SELECT * FROM tracks WHERE source_id = ?').get(meta.sourceId) as
-      | TrackRow
+    const sourceId = `${info.extractor_key}:${info.id}`;
+    let playlist = db.prepare('SELECT * FROM playlists WHERE source_id = ?').get(sourceId) as
+      | PlaylistRow
       | undefined;
-    if (existing) {
-      if (existing.status === 'error') enqueue(existing.id);
-      return reply.code(200).send(toTrack(getTrack(existing.id)!));
+    if (!playlist) {
+      const { lastInsertRowid } = db
+        .prepare('INSERT INTO playlists (name, source_id) VALUES (?, ?)')
+        .run(info.title || 'Playlist importada', sourceId);
+      playlist = { id: Number(lastInsertRowid), name: info.title, source_id: sourceId, created_at: '' };
     }
 
-    const { lastInsertRowid } = db
-      .prepare(
-        'INSERT INTO tracks (source_id, source_url, title, artist, album, duration) VALUES (?, ?, ?, ?, ?, ?)',
-      )
-      .run(meta.sourceId, meta.sourceUrl, meta.title, meta.artist, meta.album, meta.duration);
-    const id = Number(lastInsertRowid);
-    enqueue(id);
-    return reply.code(201).send(toTrack(getTrack(id)!));
+    const link = db.prepare(
+      `INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position)
+       VALUES (?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_tracks WHERE playlist_id = ?))`,
+    );
+    let added = 0;
+    let existing = 0;
+    let skipped = 0;
+    const toDownload: number[] = [];
+    db.exec('BEGIN');
+    try {
+      for (const entry of info.entries ?? []) {
+        const entryInfo = entryToInfo(entry);
+        if (!entryInfo) {
+          skipped++;
+          continue;
+        }
+        const { id, created, download } = addTrack(entryInfo);
+        if (created) added++;
+        else existing++;
+        if (download) toDownload.push(id);
+        link.run(playlist.id, id, playlist.id);
+      }
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    toDownload.forEach(enqueue);
+
+    return reply.code(201).send({
+      kind: 'playlist',
+      playlist: { id: playlist.id, name: playlist.name },
+      added,
+      existing,
+      skipped,
+    });
   });
 
   app.patch<IdParams & { Body: { title?: string; artist?: string; album?: string } }>(

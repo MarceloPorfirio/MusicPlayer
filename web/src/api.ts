@@ -27,6 +27,16 @@ export interface Playlist {
   tracks: Track[];
 }
 
+export type ImportResult =
+  | { kind: 'track'; track: Track }
+  | {
+      kind: 'playlist';
+      playlist: { id: number; name: string };
+      added: number;
+      existing: number;
+      skipped: number;
+    };
+
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
@@ -42,7 +52,7 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 
 export const api = {
   tracks: () => request<Track[]>('GET', '/api/tracks'),
-  addTrack: (url: string) => request<Track>('POST', '/api/tracks', { url }),
+  importUrl: (url: string) => request<ImportResult>('POST', '/api/import', { url }),
   retryTrack: (id: number) => request<Track>('POST', `/api/tracks/${id}/retry`),
   deleteTrack: (id: number) => request<void>('DELETE', `/api/tracks/${id}`),
 
