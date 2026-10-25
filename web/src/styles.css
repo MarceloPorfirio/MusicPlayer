@@ -238,6 +238,64 @@ li.active .cover-overlay { opacity: 1; }
   padding: 0 12px calc(env(safe-area-inset-bottom) + 8px);
 }
 .player-row { display: flex; align-items: center; gap: 12px; max-width: 900px; margin: 0 auto; }
+.player-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+}
+
+.now-playing {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--bg) 60%);
+  padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 24px);
+}
+.np-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 8px 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.np-main { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.np-cover { display: flex; justify-content: center; margin: 16px 0; }
+.np-cover .cover {
+  width: min(100%, 360px) !important;
+  height: auto !important;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.5);
+}
+.np-info { display: flex; flex-direction: column; min-width: 0; }
+.np-title { font-size: 1.3rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np-seek { width: 100%; padding: 0; accent-color: var(--accent); background: transparent; margin-top: 8px; }
+.np-times {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.np-controls { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 16px; }
+.icon-btn.big { width: 56px; height: 56px; }
+.icon-btn.big svg { width: 32px; height: 32px; }
+.icon-btn.play.big { width: 64px; height: 64px; }
+.icon-btn.on { color: var(--accent); }
+.np-queue { max-width: 480px; margin: 0 auto; }
+.np-queue h3 { font-size: 1rem; margin: 16px 0 8px; }
 .player-controls { display: flex; align-items: center; }
 .icon-btn.play { background: var(--text); color: #000; }
 .icon-btn.play:hover { background: var(--text); color: #000; }

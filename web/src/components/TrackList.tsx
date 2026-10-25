@@ -11,6 +11,8 @@ import {
   PauseIcon,
   PlayIcon,
   PlusIcon,
+  QueueAddIcon,
+  QueueNextIcon,
   RetryIcon,
   SavedIcon,
   TrashIcon,
@@ -141,8 +143,10 @@ interface MenuProps {
 
 function TrackMenu({ track, onClose, onAddToPlaylist, onEdit, onRemove, removeLabel }: MenuProps) {
   const offline = useOffline();
+  const player = usePlayer();
   const ready = track.status === 'ready';
   const saved = offline.saved.has(track.id);
+  const playable = offline.canPlay(track);
 
   // Fecha o menu e executa a ação escolhida.
   const pick = (action: () => void) => () => {
@@ -161,6 +165,20 @@ function TrackMenu({ track, onClose, onAddToPlaylist, onEdit, onRemove, removeLa
           </span>
         </div>
         <ul className="menu-list">
+          {playable && (
+            <>
+              <li>
+                <button onClick={pick(() => player.playNext(track))}>
+                  <QueueNextIcon /> Tocar a seguir
+                </button>
+              </li>
+              <li>
+                <button onClick={pick(() => player.addToQueue(track))}>
+                  <QueueAddIcon /> Adicionar à fila
+                </button>
+              </li>
+            </>
+          )}
           {ready && !saved && (
             <li>
               <button
