@@ -6,22 +6,9 @@ type CapturableAudio = HTMLAudioElement & { captureStream?: () => MediaStream };
 
 let sharedContext: AudioContext | null = null;
 
-/**
- * Analisa o áudio via captureStream(): lê uma cópia do som sem desviar a saída do <audio>.
- * (createMediaElementSource desviaria, e no iOS a música pararia com a tela bloqueada.)
- * Retorna null onde não há suporte (Safari, Firefox) — aí o visual cai para animação CSS.
- */
-function createAnalyser(audio: CapturableAudio) {
-  if (typeof audio.captureStream !== 'function' || typeof AudioContext === 'undefined') return null;
-  sharedContext ??= new AudioContext();
-  const ctx = sharedContext;
-  void ctx.resume();
-
-  const analyser = ctx.createAnalyser();
-  analyser.fftSize = 512;
-  analyser.smoothingTimeConstant = 0.8;
-
-  const stream = audio.captureStream();
+/** Liga um <audio> ao analisador, acompanhando as trocas de faixa. */
+function captureInto(ctx: AudioContext, analyser: AnalyserNode, audio: CapturableAudio) {
+  const stream = audio.captureStream!();
   let source: MediaStreamAudioSourceNode | null = null;
   // A cada troca de faixa o stream ganha uma trilha nova, mas o Chrome mantém as antigas
   // como "live" — e createMediaStreamSource(stream) pega a de menor id, não a mais nova.
@@ -41,12 +28,34 @@ function createAnalyser(audio: CapturableAudio) {
   };
   connect();
   stream.addEventListener('addtrack', connect);
+  return () => {
+    stream.removeEventListener('addtrack', connect);
+    source?.disconnect();
+  };
+}
+
+/**
+ * Analisa o áudio via captureStream(): lê uma cópia do som sem desviar a saída do <audio>.
+ * (createMediaElementSource desviaria, e no iOS a música pararia com a tela bloqueada.)
+ * Recebe os dois decks do player: na transição entre faixas, as barras mostram a mistura.
+ * Retorna null onde não há suporte (Safari, Firefox) — aí o visual cai para animação CSS.
+ */
+function createAnalyser(decks: CapturableAudio[]) {
+  if (!decks.length || decks.some((d) => typeof d.captureStream !== 'function')) return null;
+  if (typeof AudioContext === 'undefined') return null;
+  sharedContext ??= new AudioContext();
+  const ctx = sharedContext;
+  void ctx.resume();
+
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = 0.8;
+  const disposers = decks.map((deck) => captureInto(ctx, analyser, deck));
 
   return {
     analyser,
     dispose() {
-      stream.removeEventListener('addtrack', connect);
-      source?.disconnect();
+      disposers.forEach((dispose) => dispose());
     },
   };
 }
@@ -54,21 +63,20 @@ function createAnalyser(audio: CapturableAudio) {
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 interface Props {
-  audioRef: RefObject<HTMLAudioElement | null>;
+  getDecks: () => HTMLAudioElement[];
   playing: boolean;
   /** Elemento que pulsa com o grave (a capa). */
   pulseRef?: RefObject<HTMLElement | null>;
 }
 
-export function Visualizer({ audioRef, playing, pulseRef }: Props) {
+export function Visualizer({ getDecks, playing, pulseRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [live, setLive] = useState(true);
 
   useEffect(() => {
-    const audio = audioRef.current as CapturableAudio | null;
     const canvas = canvasRef.current;
-    if (!audio || !canvas || reducedMotion()) return setLive(false);
-    const capture = createAnalyser(audio);
+    if (!canvas || reducedMotion()) return setLive(false);
+    const capture = createAnalyser(getDecks() as CapturableAudio[]);
     if (!capture) return setLive(false);
 
     const { analyser } = capture;
@@ -129,7 +137,7 @@ export function Visualizer({ audioRef, playing, pulseRef }: Props) {
       capture.dispose();
       if (pulseRef?.current) pulseRef.current.style.transform = '';
     };
-  }, [audioRef, pulseRef]);
+  }, [getDecks, pulseRef]);
 
   if (!live) {
     return (

@@ -320,6 +320,9 @@ li.active .cover-overlay { opacity: 1; }
 .smart-card.top { background: linear-gradient(135deg, #e65100, #c62828); }
 
 .np-info-row { display: flex; align-items: center; gap: 8px; }
+.np-crossfade { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.np-crossfade .segmented { margin: 0; }
+.np-crossfade .segmented button { padding: 5px 10px; font-size: 0.85rem; }
 .np-info-row .np-info { flex: 1; }
 
 .playlist-header { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }

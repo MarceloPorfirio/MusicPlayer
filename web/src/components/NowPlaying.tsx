@@ -16,7 +16,14 @@ import {
   ShuffleIcon,
 } from './icons';
 
-const REPEAT_LABEL = { off: 'Repetir: desligado', all: 'Repetir: fila', one: 'Repetir: esta música' };
+const CROSSFADE_OPTIONS: [number, string][] = [
+  [0, 'Desligada'],
+  [3, '3 s'],
+  [6, '6 s'],
+  [10, '10 s'],
+];
+
+const REPEAT_LABEL ={ off: 'Repetir: desligado', all: 'Repetir: fila', one: 'Repetir: esta música' };
 
 export function NowPlaying({ onClose }: { onClose: () => void }) {
   const p = usePlayer();
@@ -56,7 +63,7 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
             <Cover trackId={p.current.hasCover ? p.current.id : null} size={320} />
           </div>
         </div>
-        <Visualizer audioRef={p.audioRef} playing={p.playing} pulseRef={pulseRef} />
+        <Visualizer getDecks={p.getDecks} playing={p.playing} pulseRef={pulseRef} />
         <div className="np-info-row">
           <div className="np-info">
             <span className="np-title">{p.current.title}</span>
@@ -111,6 +118,26 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
             {p.repeat === 'one' ? <RepeatOneIcon /> : <RepeatIcon />}
           </button>
         </div>
+
+        {/* No iPhone a página não controla o volume, então não há como cruzar faixas. */}
+        {p.crossfadeSupported && (
+          <div className="np-crossfade">
+            <span className="track-sub">Transição suave</span>
+            <div className="segmented" role="radiogroup" aria-label="Transição suave">
+              {CROSSFADE_OPTIONS.map(([seconds, label]) => (
+                <button
+                  key={seconds}
+                  role="radio"
+                  aria-checked={p.crossfade === seconds}
+                  className={p.crossfade === seconds ? 'active' : undefined}
+                  onClick={() => p.setCrossfade(seconds)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <section className="np-queue">
