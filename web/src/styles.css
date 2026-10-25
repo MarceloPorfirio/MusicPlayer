@@ -112,6 +112,31 @@ input:focus { outline: none; border-color: var(--accent); }
 .add-form .success { flex-basis: 100%; margin: 0; }
 .success { color: var(--accent); }
 
+.search-results {
+  margin-bottom: 16px;
+  padding: 4px 4px 8px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.search-results > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 8px;
+}
+.search-results .error,
+.search-results .empty { margin: 8px; padding: 0; }
+.search-results .track-main { cursor: default; }
+.result-thumb {
+  flex-shrink: 0;
+  width: 64px;
+  height: 36px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.in-library { display: grid; place-items: center; width: 40px; height: 40px; color: var(--accent); }
+
 .import-choice {
   flex-basis: 100%;
   display: flex;

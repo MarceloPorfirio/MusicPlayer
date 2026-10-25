@@ -27,6 +27,23 @@ export interface Playlist {
   tracks: Track[];
 }
 
+export interface SearchResult {
+  id: string;
+  title: string;
+  channel: string | null;
+  duration: number | null;
+  url: string;
+  inLibrary: boolean;
+}
+
+export interface Search {
+  id: number;
+  query: string;
+  status: 'pending' | 'processing' | 'done' | 'error';
+  error: string | null;
+  results: SearchResult[];
+}
+
 /** URL aguardando o worker (servidor com DOWNLOAD_MODE=worker). */
 export interface ImportJob {
   id: number;
@@ -80,6 +97,10 @@ export const api = {
 
   tracks: () => request<Track[]>('GET', '/api/tracks'),
   importUrl: (url: string) => request<ImportResult>('POST', '/api/import', { url }),
+  search: (q: string) => request<Search>('POST', '/api/search', { q }),
+  getSearch: (id: number) => request<Search>('GET', `/api/search/${id}`),
+  addSearchResult: (searchId: number, videoId: string) =>
+    request<ImportResult>('POST', `/api/search/${searchId}/add`, { videoId }),
   imports: () => request<ImportJob[]>('GET', '/api/imports'),
   retryImport: (id: number) => request<void>('POST', `/api/imports/${id}/retry`),
   deleteImport: (id: number) => request<void>('DELETE', `/api/imports/${id}`),

@@ -117,6 +117,29 @@ export function entryToInfo(entry: PlaylistEntry): MediaInfo | null {
   };
 }
 
+export interface SearchResult {
+  id: string;
+  title: string;
+  channel: string | null;
+  duration: number | null;
+  url: string;
+}
+
+/** Busca no YouTube. Com --flat-playlist é uma requisição só, sem abrir cada vídeo. */
+export async function searchYoutube(query: string, limit = 10): Promise<SearchResult[]> {
+  const json = await run(['-J', '--flat-playlist', '--no-warnings', `ytsearch${limit}:${query}`]);
+  const info = JSON.parse(json) as MediaInfo;
+  return (info.entries ?? [])
+    .filter((e) => e.id && e.title)
+    .map((e) => ({
+      id: e.id,
+      title: e.title!,
+      channel: (e.channel ?? e.uploader)?.replace(/ - Topic$|\s*VEVO$/i, '') ?? null,
+      duration: e.duration ? Math.round(e.duration) : null,
+      url: e.url || `https://www.youtube.com/watch?v=${e.id}`,
+    }));
+}
+
 /** Baixa só o áudio como .m4a + capa .jpg em <outDir>/<basename>.* */
 export async function downloadAudio(
   url: string,

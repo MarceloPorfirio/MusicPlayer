@@ -116,6 +116,8 @@ celular/PC ──URL──▶ VPS (fila) ◀──pede tarefa── worker no PC
 | GET    | `/api/tracks`                         | Lista a biblioteca                  |
 | GET    | `/api/status`                         | Modo de download, worker conectado, itens aguardando |
 | GET    | `/api/imports`                        | URLs aguardando o worker (modo worker) |
+| POST   | `/api/search` `{ q }`                 | Busca no YouTube (no modo worker, quem busca é o PC; acompanhe por `GET /api/search/:id`) |
+| POST   | `/api/search/:id/add` `{ videoId }`   | Adiciona um resultado da busca à biblioteca |
 | POST   | `/api/import` `{ url }`               | Vídeo → faixa; playlist → playlist com todas as faixas (reimportar sincroniza). No modo worker, só enfileira (202) |
 | PATCH  | `/api/tracks/:id`                     | Edita título/artista/álbum          |
 | POST   | `/api/tracks/:id/retry`               | Tenta baixar de novo                |

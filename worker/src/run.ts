@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { normalizeLoudness } from '../../server/src/loudness.js';
-import { downloadAudio, fetchInfo, trimInfo } from '../../server/src/ytdlp.js';
+import { downloadAudio, fetchInfo, searchYoutube, trimInfo } from '../../server/src/ytdlp.js';
 
 const SERVER_URL = process.env.SERVER_URL?.replace(/\/$/, '');
 const TOKEN = process.env.WORKER_TOKEN;
@@ -18,12 +18,13 @@ if (!SERVER_URL || !TOKEN) {
 const IDLE_PAUSE_MS = 1_000;
 const MAX_BACKOFF_MS = 60_000;
 /** O que este worker sabe fazer; o servidor só oferece tarefas desses tipos. */
-const CAPABILITIES = ['normalize'];
+const CAPABILITIES = ['normalize', 'search'];
 
 type UrlJob = { type: 'import' | 'track'; id: number; url: string };
 type Job =
   | UrlJob
-  | { type: 'normalize'; id: number };
+  | { type: 'normalize'; id: number }
+  | { type: 'search'; id: number; query: string };
 
 class AuthError extends Error {}
 
@@ -134,6 +135,23 @@ async function handleTrack(job: UrlJob) {
   }
 }
 
+async function handleSearch(job: { id: number; query: string }) {
+  log(`Buscando no YouTube: "${job.query}"`);
+  try {
+    const results = await searchYoutube(job.query);
+    await withRetry('envio dos resultados', () =>
+      api('POST', `/api/worker/searches/${job.id}/result`, { results }),
+    );
+    log(`  ${results.length} resultado(s)`);
+  } catch (err) {
+    if (err instanceof AuthError) throw err;
+    log(`  falhou: ${(err as Error).message}`);
+    await withRetry('aviso de erro', () =>
+      api('POST', `/api/worker/searches/${job.id}/error`, { message: (err as Error).message }),
+    );
+  }
+}
+
 /** Faixa antiga, baixada antes da normalização: puxa da VPS, ajusta o volume e devolve. */
 async function handleNormalize(job: { id: number }) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'musicplayer-worker-'));
@@ -181,7 +199,8 @@ while (true) {
       continue;
     }
     idleLogged = false;
-    if (job.type === 'import') await handleImport(job);
+    if (job.type === 'search') await handleSearch(job);
+    else if (job.type === 'import') await handleImport(job);
     else if (job.type === 'track') await handleTrack(job);
     else await handleNormalize(job);
   } catch (err) {

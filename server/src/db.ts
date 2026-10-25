@@ -52,6 +52,18 @@ db.exec(`
   );
 `);
 
+// Buscas no YouTube (no modo worker, quem busca é o PC). Descartáveis: limpas depois de 1 h.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS searches (
+    id          INTEGER PRIMARY KEY,
+    query       TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'pending', -- pending | processing | done | error
+    results     TEXT,                            -- JSON de SearchResult[]
+    error       TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
 // Migrações de bancos criados antes da coluna existir.
 const trackCols = db.prepare('PRAGMA table_info(tracks)').all() as unknown as { name: string }[];
 if (!trackCols.some((c) => c.name === 'claimed_at')) {
@@ -84,6 +96,15 @@ export interface TrackRow {
   cover: string | null;
   claimed_at: string | null;
   normalized: number;
+  created_at: string;
+}
+
+export interface SearchRow {
+  id: number;
+  query: string;
+  status: 'pending' | 'processing' | 'done' | 'error';
+  results: string | null;
+  error: string | null;
   created_at: string;
 }
 

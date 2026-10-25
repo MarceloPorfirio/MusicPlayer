@@ -7,7 +7,7 @@ import { db, type ImportRow, type TrackRow } from '../db.js';
 import { progress } from '../downloads.js';
 import { waitForJob } from '../jobs.js';
 import { getTrack, importInfo } from '../library.js';
-import { trimInfo, type MediaInfo } from '../ytdlp.js';
+import { trimInfo, type MediaInfo, type SearchResult } from '../ytdlp.js';
 
 /** Última vez que o worker falou com o servidor (ms). */
 let lastSeen = 0;
@@ -67,6 +67,7 @@ export async function workerRoutes(app: FastifyInstance) {
       // Um worker por vez, e ele faz uma tarefa de cada vez: se está pedindo outra, não tem
       // nenhuma em mãos. O que ficou "em andamento" (upload que falhou, PC desligado no meio,
       // worker reiniciado) volta para a fila na hora, em vez de esperar um tempo limite.
+      db.exec("UPDATE searches SET status = 'pending' WHERE status = 'processing'");
       db.exec("UPDATE imports SET status = 'pending', claimed_at = NULL WHERE status = 'processing'");
       db.exec("UPDATE tracks SET status = 'pending', claimed_at = NULL WHERE status = 'downloading'");
       progress.clear();
@@ -82,6 +83,25 @@ export async function workerRoutes(app: FastifyInstance) {
         job = nextJob(capabilities);
       }
       return job ?? reply.code(204).send();
+    });
+
+    w.post<IdParams & { Body: { results?: SearchResult[] } }>(
+      '/api/worker/searches/:id/result',
+      async (req, reply) => {
+        db.prepare("UPDATE searches SET status = 'done', results = ? WHERE id = ?").run(
+          JSON.stringify(req.body?.results ?? []),
+          Number(req.params.id),
+        );
+        return reply.code(204).send();
+      },
+    );
+
+    w.post<IdParams & { Body: { message?: string } }>('/api/worker/searches/:id/error', async (req, reply) => {
+      db.prepare("UPDATE searches SET status = 'error', error = ? WHERE id = ?").run(
+        req.body?.message ?? 'Erro desconhecido no worker.',
+        Number(req.params.id),
+      );
+      return reply.code(204).send();
     });
 
     /** Arquivo atual da faixa, para o worker normalizar faixas antigas. */
@@ -170,11 +190,23 @@ export async function workerRoutes(app: FastifyInstance) {
 }
 
 type Job =
+  | { type: 'search'; id: number; query: string }
   | { type: 'import'; id: number; url: string }
   | { type: 'track'; id: number; url: string }
   | { type: 'normalize'; id: number };
 
 function nextJob(capabilities: Set<string>): Job | null {
+  // Busca primeiro: tem alguém olhando para a tela esperando o resultado.
+  if (capabilities.has('search')) {
+    const search = db
+      .prepare("SELECT id, query FROM searches WHERE status = 'pending' ORDER BY id LIMIT 1")
+      .get() as { id: number; query: string } | undefined;
+    if (search) {
+      db.prepare("UPDATE searches SET status = 'processing' WHERE id = ?").run(search.id);
+      return { type: 'search', ...search };
+    }
+  }
+
   const imp = db
     .prepare("SELECT * FROM imports WHERE status = 'pending' ORDER BY id LIMIT 1")
     .get() as ImportRow | undefined;

@@ -14,6 +14,7 @@ import {
 } from './config.js';
 import { resumePending } from './downloads.js';
 import { playlistRoutes } from './routes/playlists.js';
+import { searchRoutes } from './routes/search.js';
 import { trackRoutes } from './routes/tracks.js';
 import { workerRoutes } from './routes/worker.js';
 
@@ -37,6 +38,7 @@ await app.register(fastifyStatic, {
 await app.register(trackRoutes);
 await app.register(playlistRoutes);
 await app.register(workerRoutes);
+await app.register(searchRoutes);
 
 app.setNotFoundHandler((req, reply) => {
   if (serveWeb && req.method === 'GET' && !req.url.startsWith('/api/')) {
