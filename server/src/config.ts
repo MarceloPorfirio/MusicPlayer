@@ -33,3 +33,11 @@ export const WEB_DIST = path.join(root, 'web', 'dist');
 export const YTDLP_BIN = process.env.YTDLP_BIN ?? findWinget('yt-dlp.yt-dlp_', 'yt-dlp.exe') ?? 'yt-dlp';
 export const FFMPEG_DIR = process.env.FFMPEG_DIR ?? findWinget('yt-dlp.FFmpeg_', 'ffmpeg.exe', true);
 export const DOWNLOAD_CONCURRENCY = Number(process.env.DOWNLOAD_CONCURRENCY ?? 2);
+/** Opções extras para todas as chamadas do yt-dlp, ex.: "--sleep-requests 1 --cookies /app/data/cookies.txt". */
+export const YTDLP_ARGS = process.env.YTDLP_ARGS?.trim().split(/\s+/).filter(Boolean) ?? [];
+
+/** Sem senha configurada o login fica desligado (uso local). Em servidor público, defina sempre. */
+export const APP_PASSWORD = process.env.APP_PASSWORD || undefined;
+export const SESSION_SECRET = process.env.SESSION_SECRET || undefined;
+/** Atrás de um proxy reverso (Caddy/Nginx), para o cookie Secure e o IP do cliente. */
+export const TRUST_PROXY = process.env.TRUST_PROXY === 'true';

@@ -11,7 +11,7 @@ import { usePlayer } from './player';
 
 type View = { kind: 'library' } | { kind: 'playlists' } | { kind: 'playlist'; id: number };
 
-export function App() {
+export function App({ onLogout }: { onLogout?: () => void }) {
   const [view, setView] = useState<View>({ kind: 'library' });
   const [tracks, setTracks] = useState<Track[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
@@ -57,6 +57,7 @@ export function App() {
           >
             Playlists
           </button>
+          {onLogout && <button onClick={onLogout}>Sair</button>}
         </nav>
       </header>
 

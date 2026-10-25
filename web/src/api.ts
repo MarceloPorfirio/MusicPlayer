@@ -44,13 +44,24 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
+    // Sessão expirada/ausente: o AuthGate escuta e mostra a tela de login.
+    if (res.status === 401 && url !== '/api/login') window.dispatchEvent(new Event('unauthorized'));
     const data = await res.json().catch(() => null);
     throw new Error(data?.error ?? `Erro ${res.status}`);
   }
   return res.status === 204 ? (undefined as T) : res.json();
 }
 
+export interface Session {
+  authenticated: boolean;
+  required: boolean;
+}
+
 export const api = {
+  session: () => request<Session>('GET', '/api/session'),
+  login: (password: string) => request<Session>('POST', '/api/login', { password }),
+  logout: () => request<Session>('POST', '/api/logout'),
+
   tracks: () => request<Track[]>('GET', '/api/tracks'),
   importUrl: (url: string) => request<ImportResult>('POST', '/api/import', { url }),
   retryTrack: (id: number) => request<Track>('POST', `/api/tracks/${id}/retry`),

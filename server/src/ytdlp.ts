@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { FFMPEG_DIR, MEDIA_DIR, YTDLP_BIN } from './config.js';
+import { FFMPEG_DIR, MEDIA_DIR, YTDLP_ARGS, YTDLP_BIN } from './config.js';
 
 export interface MediaInfo {
   _type?: string;
@@ -29,7 +29,11 @@ export interface PlaylistEntry {
 }
 
 function run(args: string[], onLine?: (line: string) => void): Promise<string> {
-  const fullArgs = FFMPEG_DIR ? ['--ffmpeg-location', FFMPEG_DIR, ...args] : args;
+  const fullArgs = [
+    ...(FFMPEG_DIR ? ['--ffmpeg-location', FFMPEG_DIR] : []),
+    ...YTDLP_ARGS,
+    ...args,
+  ];
   return new Promise((resolve, reject) => {
     const proc = spawn(YTDLP_BIN, fullArgs, { windowsHide: true });
     let stdout = '';

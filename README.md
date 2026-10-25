@@ -37,18 +37,48 @@ npm start        # http://localhost:3000
 
 ### Variáveis de ambiente (opcionais)
 
-| Variável               | Padrão    | Descrição                                 |
-| ---------------------- | --------- | ----------------------------------------- |
-| `PORT`                 | `3000`    | Porta da API                              |
-| `HOST`                 | `0.0.0.0` | Interface de rede                         |
-| `DATA_DIR`             | `./data`  | Onde ficam o banco e os arquivos          |
-| `YTDLP_BIN`            | `yt-dlp`  | Caminho do executável do yt-dlp           |
-| `FFMPEG_DIR`           | —         | Pasta do ffmpeg, se não estiver no PATH   |
-| `DOWNLOAD_CONCURRENCY` | `2`       | Downloads simultâneos                     |
+| Variável               | Padrão    | Descrição                                                  |
+| ---------------------- | --------- | ---------------------------------------------------------- |
+| `APP_PASSWORD`         | —         | Senha de acesso. Sem ela o login fica desligado            |
+| `SESSION_SECRET`       | derivado  | Chave que assina o cookie de sessão                        |
+| `TRUST_PROXY`          | `false`   | `true` atrás de Caddy/Nginx                                |
+| `PORT`                 | `3000`    | Porta da API                                               |
+| `HOST`                 | `0.0.0.0` | Interface de rede                                          |
+| `DATA_DIR`             | `./data`  | Onde ficam o banco e os arquivos                           |
+| `YTDLP_BIN`            | `yt-dlp`  | Caminho do executável do yt-dlp                            |
+| `YTDLP_ARGS`           | —         | Opções extras do yt-dlp (pausas, cookies, runtime JS)      |
+| `FFMPEG_DIR`           | —         | Pasta do ffmpeg, se não estiver no PATH                    |
+| `DOWNLOAD_CONCURRENCY` | `2`       | Downloads simultâneos                                      |
 
-## Usando no celular
+## Deploy na VPS (Docker + Caddy)
 
-O service worker (e, portanto, instalar como app) só funciona em `localhost` ou **HTTPS**. Para abrir pelo celular, a forma mais simples é o [Tailscale](https://tailscale.com/): instale no PC e no celular e rode `tailscale serve 3000`. Isso dá uma URL HTTPS privada, que funciona também fora de casa.
+Pré-requisitos: Docker com o plugin compose, as portas 80 e 443 livres e um domínio com registro **A** apontando para o IP da VPS.
+
+```bash
+git clone <seu-repo> musicplayer && cd musicplayer
+cp .env.example .env    # defina DOMAIN e APP_PASSWORD
+docker compose up -d --build
+```
+
+O Caddy emite o certificado HTTPS sozinho. Abra `https://seu-dominio` no celular, faça login e use **Adicionar à tela inicial** para instalar o app.
+
+- **Atualizar o app:** `git pull && docker compose up -d --build`
+- **Atualizar o yt-dlp:** `docker compose restart app` (ele se atualiza a cada start)
+- **Logs:** `docker compose logs -f app`
+- **Backup:** a pasta `data/`, que contém o banco e as músicas
+
+**Se a VPS já tiver Nginx (ou outro serviço) nas portas 80/443:** remova o serviço `caddy` do compose, exponha `ports: ["127.0.0.1:3000:3000"]` no `app` e faça o proxy do seu Nginx para `127.0.0.1:3000`.
+
+### Se o YouTube bloquear o IP da VPS
+
+Se os downloads falharem com *"Sign in to confirm you're not a bot"*:
+
+1. Exporte os cookies de uma conta **secundária** do YouTube (formato Netscape, com uma extensão como "Get cookies.txt LOCALLY").
+2. Salve o arquivo como `data/cookies.txt`.
+3. Use a linha `YTDLP_ARGS` com `--cookies` do `.env.example`.
+4. Rode `docker compose up -d`.
+
+Não use a sua conta principal: contas usadas por automação a partir de datacenter podem ser bloqueadas.
 
 ## API
 

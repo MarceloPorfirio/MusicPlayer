@@ -36,6 +36,20 @@ input:focus { outline: none; border-color: var(--accent); }
 
 .app { min-height: 100dvh; display: flex; flex-direction: column; }
 
+.login { min-height: 100dvh; display: grid; place-items: center; padding: 16px; }
+.login-card {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.login-card h1 { margin: 0 0 8px; font-size: 1.4rem; }
+.login-card input,
+.login-card .btn { width: 100%; justify-content: center; }
+.login-card .error { margin: 0; }
+
 .top-bar {
   position: sticky;
   top: 0;
