@@ -15,4 +15,7 @@ export const TrashIcon = base('M9 3h6l1 2h4v2H4V5h4l1-2zM6 9h12l-1 12H7L6 9z');
 export const RetryIcon = base('M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z');
 export const ShuffleIcon = base('M10.6 9.2 5.4 4 4 5.4l5.2 5.2 1.4-1.4zM14.5 4l2 2L4 18.6 5.4 20 18 7.5l2 2V4h-5.5zm.3 9.4-1.4 1.4 3.1 3.1-2 2.1H20v-5.5l-2 2-3.2-3.1z');
 export const EditIcon = base('M4 17.25V20h2.75L17.8 8.94l-2.75-2.75L4 17.25zM20.7 6.04a1 1 0 0 0 0-1.41l-1.33-1.33a1 1 0 0 0-1.41 0l-1.13 1.13 2.75 2.75 1.12-1.14z');
+export const MoreIcon = base('M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z');
+export const DownloadIcon = base('M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z');
+export const SavedIcon = base('M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.2-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7z');
 export const MusicIcon = base('M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z');

@@ -7,6 +7,7 @@ import { PlaylistView } from './components/PlaylistView';
 import { PlaylistsView } from './components/PlaylistsView';
 import { TrackList } from './components/TrackList';
 import { PlayIcon, ShuffleIcon } from './components/icons';
+import { useOffline } from './offline';
 import { usePlayer } from './player';
 
 type View = { kind: 'library' } | { kind: 'playlists' } | { kind: 'playlist'; id: number };
@@ -18,6 +19,7 @@ export function App({ onLogout }: { onLogout?: () => void }) {
   const [addingTrack, setAddingTrack] = useState<Track | null>(null);
   const [query, setQuery] = useState('');
   const { playTracks } = usePlayer();
+  const offline = useOffline();
 
   const loadTracks = useCallback(() => api.tracks().then(setTracks), []);
   const loadPlaylists = useCallback(() => api.playlists().then(setPlaylists), []);
@@ -61,6 +63,10 @@ export function App({ onLogout }: { onLogout?: () => void }) {
         </nav>
       </header>
 
+      {!offline.online && (
+        <div className="offline-banner">Sem conexão: tocando só as músicas baixadas no aparelho.</div>
+      )}
+
       <main className="content">
         {view.kind === 'library' && (
           <>
@@ -74,7 +80,7 @@ export function App({ onLogout }: { onLogout?: () => void }) {
                 onChange={(e) => setQuery(e.target.value)}
               />
             )}
-            {visibleTracks.some((t) => t.status === 'ready') && (
+            {visibleTracks.some(offline.canPlay) && (
               <div className="list-actions">
                 <button className="btn primary" onClick={() => playTracks(visibleTracks)}>
                   <PlayIcon width={18} height={18} /> Tocar tudo
@@ -100,6 +106,7 @@ export function App({ onLogout }: { onLogout?: () => void }) {
                 if (!confirm(`Apagar "${t.title}" da biblioteca e de todas as playlists?`)) return;
                 try {
                   await api.deleteTrack(t.id);
+                  await offline.remove([t]);
                 } catch (err) {
                   alert((err as Error).message);
                 }

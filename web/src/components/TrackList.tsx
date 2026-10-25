@@ -1,14 +1,25 @@
 import { useState } from 'react';
 import { formatTime, type Track } from '../api';
+import { useOffline } from '../offline';
 import { usePlayer } from '../player';
 import { Cover } from './Cover';
 import { EditTrackDialog } from './EditTrackDialog';
-import { EditIcon, PauseIcon, PlayIcon, PlusIcon, RetryIcon, TrashIcon } from './icons';
+import {
+  DownloadIcon,
+  EditIcon,
+  MoreIcon,
+  PauseIcon,
+  PlayIcon,
+  PlusIcon,
+  RetryIcon,
+  SavedIcon,
+  TrashIcon,
+} from './icons';
 
 interface Props {
   tracks: Track[];
   onAddToPlaylist?: (track: Track) => void;
-  /** Mostra o botão de editar; chamado depois de salvar. */
+  /** Mostra a opção de editar; chamado depois de salvar. */
   onEdited?: () => void;
   onRemove: (track: Track) => void;
   removeLabel: string;
@@ -24,9 +35,30 @@ export function TrackList({
   onRetry,
 }: Props) {
   const { current, playing, playTracks, toggle, updateTrack } = usePlayer();
+  const offline = useOffline();
   const [editing, setEditing] = useState<Track | null>(null);
+  const [menuFor, setMenuFor] = useState<Track | null>(null);
 
   if (!tracks.length) return <p className="empty">Nenhuma música aqui ainda.</p>;
+
+  function subtitle(t: Track) {
+    switch (t.status) {
+      case 'pending':
+        return 'Na fila…';
+      case 'downloading':
+        return `Baixando ${Math.round(t.progress ?? 0)}%`;
+      case 'error':
+        return <span className="error">Falhou: {t.error}</span>;
+      default:
+        return (
+          <>
+            {offline.saved.has(t.id) && <SavedIcon className="saved-icon" aria-label="No aparelho" />}
+            {offline.saving.has(t.id) && 'Salvando no aparelho… '}
+            {t.artist ?? 'Artista desconhecido'}
+          </>
+        );
+    }
+  }
 
   return (
     <>
@@ -40,21 +72,32 @@ export function TrackList({
           }}
         />
       )}
+      {menuFor && (
+        <TrackMenu
+          track={menuFor}
+          onClose={() => setMenuFor(null)}
+          onAddToPlaylist={onAddToPlaylist}
+          onEdit={onEdited ? setEditing : undefined}
+          onRemove={onRemove}
+          removeLabel={removeLabel}
+        />
+      )}
       <ul className="track-list">
         {tracks.map((t) => {
-          const ready = t.status === 'ready';
+          const playable = offline.canPlay(t);
           const isCurrent = current?.id === t.id;
+          const classes = [isCurrent && 'active', t.status === 'ready' && !playable && 'unavailable'];
           return (
-            <li key={t.id} className={isCurrent ? 'active' : undefined}>
+            <li key={t.id} className={classes.filter(Boolean).join(' ') || undefined}>
               <button
                 className="track-main"
-                disabled={!ready}
-                title={ready ? 'Tocar' : undefined}
+                disabled={!playable}
+                title={playable ? 'Tocar' : undefined}
                 onClick={() => (isCurrent ? toggle() : playTracks(tracks, t))}
               >
                 <span className="cover-wrap">
                   <Cover trackId={t.hasCover ? t.id : null} />
-                  {ready && (
+                  {playable && (
                     <span className="cover-overlay">
                       {isCurrent && playing ? <PauseIcon /> : <PlayIcon />}
                     </span>
@@ -62,12 +105,7 @@ export function TrackList({
                 </span>
                 <span className="track-text">
                   <span className="track-title">{t.title}</span>
-                  <span className="track-sub">
-                    {t.status === 'ready' && (t.artist ?? 'Artista desconhecido')}
-                    {t.status === 'pending' && 'Na fila…'}
-                    {t.status === 'downloading' && `Baixando ${Math.round(t.progress ?? 0)}%`}
-                    {t.status === 'error' && <span className="error">Falhou: {t.error}</span>}
-                  </span>
+                  <span className="track-sub">{subtitle(t)}</span>
                 </span>
                 <span className="track-duration">{formatTime(t.duration)}</span>
               </button>
@@ -80,22 +118,8 @@ export function TrackList({
                     <RetryIcon />
                   </button>
                 )}
-                {onEdited && (
-                  <button className="icon-btn" title="Editar" onClick={() => setEditing(t)}>
-                    <EditIcon />
-                  </button>
-                )}
-                {ready && onAddToPlaylist && (
-                  <button
-                    className="icon-btn"
-                    title="Adicionar à playlist"
-                    onClick={() => onAddToPlaylist(t)}
-                  >
-                    <PlusIcon />
-                  </button>
-                )}
-                <button className="icon-btn" title={removeLabel} onClick={() => onRemove(t)}>
-                  <TrashIcon />
+                <button className="icon-btn" title="Mais opções" onClick={() => setMenuFor(t)}>
+                  <MoreIcon />
                 </button>
               </div>
             </li>
@@ -103,5 +127,78 @@ export function TrackList({
         })}
       </ul>
     </>
+  );
+}
+
+interface MenuProps {
+  track: Track;
+  onClose: () => void;
+  onAddToPlaylist?: (track: Track) => void;
+  onEdit?: (track: Track) => void;
+  onRemove: (track: Track) => void;
+  removeLabel: string;
+}
+
+function TrackMenu({ track, onClose, onAddToPlaylist, onEdit, onRemove, removeLabel }: MenuProps) {
+  const offline = useOffline();
+  const ready = track.status === 'ready';
+  const saved = offline.saved.has(track.id);
+
+  // Fecha o menu e executa a ação escolhida.
+  const pick = (action: () => void) => () => {
+    onClose();
+    action();
+  };
+
+  return (
+    <div className="dialog-backdrop" onClick={onClose}>
+      <div className="dialog" role="menu" onClick={(e) => e.stopPropagation()}>
+        <div className="menu-header">
+          <Cover trackId={track.hasCover ? track.id : null} />
+          <span className="track-text">
+            <span className="track-title">{track.title}</span>
+            <span className="track-sub">{track.artist ?? 'Artista desconhecido'}</span>
+          </span>
+        </div>
+        <ul className="menu-list">
+          {ready && !saved && (
+            <li>
+              <button
+                disabled={!offline.online || offline.saving.has(track.id)}
+                onClick={pick(() => void offline.save([track]))}
+              >
+                <DownloadIcon /> Baixar no aparelho
+              </button>
+            </li>
+          )}
+          {saved && (
+            <li>
+              <button onClick={pick(() => void offline.remove([track]))}>
+                <SavedIcon /> Remover do aparelho
+              </button>
+            </li>
+          )}
+          {ready && onAddToPlaylist && (
+            <li>
+              <button onClick={pick(() => onAddToPlaylist(track))}>
+                <PlusIcon /> Adicionar à playlist
+              </button>
+            </li>
+          )}
+          {onEdit && (
+            <li>
+              <button onClick={pick(() => onEdit(track))}>
+                <EditIcon /> Editar informações
+              </button>
+            </li>
+          )}
+          <li>
+            <button className="danger" onClick={pick(() => onRemove(track))}>
+              <TrashIcon /> {removeLabel}
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
   );
 }

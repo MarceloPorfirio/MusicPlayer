@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { audioUrl, coverUrl, type Track } from './api';
+import { useOffline } from './offline';
 
 interface PlayerContextValue {
   queue: Track[];
@@ -42,9 +43,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [duration, setDuration] = useState(0);
 
   const current = queue[index] ?? null;
+  const { canPlay } = useOffline();
 
   const playTracks = useCallback((tracks: Track[], start?: Track, shuffle = false) => {
-    const ready = tracks.filter((t) => t.status === 'ready');
+    const ready = tracks.filter(canPlay);
     if (!ready.length) return;
     if (shuffle) {
       for (let i = ready.length - 1; i > 0; i--) {
@@ -60,7 +62,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.currentTime = 0;
       audio.play().catch((err) => console.warn('Falha ao tocar:', err));
     }
-  }, []);
+  }, [canPlay]);
 
   const next = useCallback(() => {
     setIndex((i) => (i + 1 < queue.length ? i + 1 : i));

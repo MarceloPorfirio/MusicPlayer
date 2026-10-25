@@ -28,6 +28,8 @@ npm install
 npm run dev      # API em :3000 + Vite em :5173 (com proxy de /api)
 ```
 
+O service worker (cache offline e "Baixar no aparelho" tocando sem rede) só roda no build de produção. Para testar o modo offline, use `npm run build && npm start`.
+
 Produção (um processo só, servindo o PWA compilado):
 
 ```bash

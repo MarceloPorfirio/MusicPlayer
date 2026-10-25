@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Playlist } from '../api';
+import { useOffline } from '../offline';
 import { usePlayer } from '../player';
 import { TrackList } from './TrackList';
-import { PlayIcon } from './icons';
+import { DownloadIcon, PlayIcon, ShuffleIcon } from './icons';
 
 interface Props {
   id: number;
@@ -13,11 +14,18 @@ interface Props {
 export function PlaylistView({ id, onBack, onChanged }: Props) {
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const { playTracks } = usePlayer();
+  const offline = useOffline();
 
   const load = useCallback(() => api.playlist(id).then(setPlaylist), [id]);
   useEffect(() => void load(), [load]);
 
   if (!playlist) return <p className="empty">Carregando…</p>;
+
+  const ready = playlist.tracks.filter((t) => t.status === 'ready');
+  const savedCount = ready.filter((t) => offline.saved.has(t.id)).length;
+  const savingCount = ready.filter((t) => offline.saving.has(t.id)).length;
+  const allSaved = ready.length > 0 && savedCount === ready.length;
+  const canPlayAny = playlist.tracks.some(offline.canPlay);
 
   async function rename() {
     const name = prompt('Novo nome da playlist', playlist!.name)?.trim();
@@ -44,11 +52,41 @@ export function PlaylistView({ id, onBack, onChanged }: Props) {
         <div className="playlist-actions">
           <button
             className="btn primary"
-            disabled={!playlist.tracks.length}
+            disabled={!canPlayAny}
             onClick={() => playTracks(playlist.tracks)}
           >
             <PlayIcon width={18} height={18} /> Tocar
           </button>
+          <button
+            className="btn"
+            disabled={!canPlayAny}
+            onClick={() => playTracks(playlist.tracks, undefined, true)}
+          >
+            <ShuffleIcon width={18} height={18} /> Aleatório
+          </button>
+          {allSaved ? (
+            <button
+              className="btn"
+              onClick={() => {
+                if (confirm('Remover as músicas desta playlist do aparelho?')) void offline.remove(ready);
+              }}
+            >
+              <DownloadIcon width={18} height={18} /> No aparelho ✓
+            </button>
+          ) : (
+            <button
+              className="btn"
+              disabled={!ready.length || !offline.online || savingCount > 0}
+              onClick={() => void offline.save(ready)}
+            >
+              <DownloadIcon width={18} height={18} />
+              {savingCount > 0
+                ? `Baixando ${savedCount}/${ready.length}…`
+                : savedCount > 0
+                  ? `Baixar restantes (${savedCount}/${ready.length})`
+                  : 'Baixar no aparelho'}
+            </button>
+          )}
           <button className="btn" onClick={rename}>
             Renomear
           </button>

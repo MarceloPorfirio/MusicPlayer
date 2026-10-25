@@ -296,6 +296,42 @@ li.active .cover-overlay { opacity: 1; }
 
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+.menu-header { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.menu-list { list-style: none; margin: 0; padding: 0; }
+.menu-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 8px;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  text-align: left;
+}
+.menu-list button:hover:not(:disabled) { background: var(--surface-2); }
+.menu-list button svg { color: var(--muted); flex-shrink: 0; }
+.menu-list .danger, .menu-list .danger svg { color: var(--danger); }
+
+.track-list li.unavailable { opacity: 0.4; }
+.saved-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  vertical-align: -2px;
+  color: var(--accent);
+}
+
+.offline-banner {
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 @media (min-width: 640px) {
   .dialog-backdrop { place-items: center; }
   .dialog { border-radius: 16px; }

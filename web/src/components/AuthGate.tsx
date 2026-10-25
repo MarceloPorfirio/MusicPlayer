@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api } from '../api';
+import { API_CACHE } from '../cacheNames';
 
 type State = 'loading' | 'login' | 'ok';
 
@@ -31,6 +32,8 @@ export function AuthGate({ children }: Props) {
 
   const logout = useCallback(async () => {
     await api.logout();
+    // Remove a cópia offline das listas; os áudios baixados continuam no aparelho.
+    if (typeof caches !== 'undefined') await caches.delete(API_CACHE);
     setState('login');
   }, []);
 
