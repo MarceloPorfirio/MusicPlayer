@@ -96,7 +96,7 @@ export function App({ onLogout }: { onLogout?: () => void }) {
             <TrackList
               tracks={visibleTracks}
               onAddToPlaylist={setAddingTrack}
-              onEdited={loadTracks}
+              onEdited={() => void Promise.all([loadTracks(), loadPlaylists()])}
               onRetry={async (t) => {
                 await api.retryTrack(t.id);
                 await loadTracks();

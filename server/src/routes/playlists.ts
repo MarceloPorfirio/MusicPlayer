@@ -35,6 +35,14 @@ export async function playlistRoutes(app: FastifyInstance) {
       .all();
   });
 
+  /** Ids das playlists que contêm a faixa. */
+  app.get<IdParams>('/api/tracks/:id/playlists', async (req) => {
+    const rows = db
+      .prepare('SELECT playlist_id FROM playlist_tracks WHERE track_id = ?')
+      .all(Number(req.params.id)) as unknown as { playlist_id: number }[];
+    return rows.map((r) => r.playlist_id);
+  });
+
   app.post<{ Body: { name?: string } }>('/api/playlists', async (req, reply) => {
     const name = req.body?.name?.trim();
     if (!name) return reply.code(400).send({ error: 'Informe um nome.' });

@@ -98,7 +98,10 @@ export function PlaylistView({ id, onBack, onChanged }: Props) {
       <TrackList
         tracks={playlist.tracks}
         removeLabel="Remover da playlist"
-        onEdited={load}
+        onEdited={() => {
+          void load();
+          onChanged();
+        }}
         onRemove={async (t) => {
           await api.removeFromPlaylist(id, t.id);
           await load();

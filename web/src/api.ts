@@ -66,6 +66,7 @@ export const api = {
   importUrl: (url: string) => request<ImportResult>('POST', '/api/import', { url }),
   updateTrack: (id: number, data: Pick<Track, 'title' | 'artist' | 'album'>) =>
     request<Track>('PATCH', `/api/tracks/${id}`, data),
+  trackPlaylists: (id: number) => request<number[]>('GET', `/api/tracks/${id}/playlists`),
   retryTrack: (id: number) => request<Track>('POST', `/api/tracks/${id}/retry`),
   deleteTrack: (id: number) => request<void>('DELETE', `/api/tracks/${id}`),
 

@@ -296,6 +296,19 @@ li.active .cover-overlay { opacity: 1; }
 
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+.check-list { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow-y: auto; }
+.check-list label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.check-list label:hover { background: var(--surface-2); }
+.check-list input { width: 18px; height: 18px; padding: 0; accent-color: var(--accent); }
+.add-playlist { align-self: flex-start; }
+
 .menu-header { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .menu-list { list-style: none; margin: 0; padding: 0; }
 .menu-list button {
