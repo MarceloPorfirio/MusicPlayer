@@ -84,8 +84,8 @@ export function AddTrackForm({ onAdded }: { onAdded: () => void }) {
           enterKeyHint="search"
           placeholder={
             online
-              ? 'Buscar música ou colar link do YouTube…'
-              : 'Sem conexão: não dá para adicionar agora'
+              ? 'Buscar no YouTube ou colar link…'
+              : 'Sem conexão: não dá para buscar agora'
           }
           value={url}
           onChange={(e) => {
@@ -95,7 +95,7 @@ export function AddTrackForm({ onAdded }: { onAdded: () => void }) {
           disabled={busy || !online}
         />
         <button type="submit" className="btn primary" disabled={busy || !online || !text}>
-          {busy ? 'Buscando…' : text && !isUrl(text) ? 'Buscar' : 'Adicionar'}
+          {busy ? 'Buscando…' : isUrl(text) ? 'Adicionar' : 'Buscar'}
         </button>
         {choice && (
           <div className="import-choice">

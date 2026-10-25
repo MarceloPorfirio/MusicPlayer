@@ -12,19 +12,20 @@ import { ArtistView, ArtistsGrid, groupByArtist } from './components/Artists';
 import { SmartListView } from './components/SmartListView';
 import { FAVORITES_CHANGED } from './history';
 import { AddToPlaylistDialog } from './components/AddToPlaylistDialog';
-import { AddTrackForm } from './components/AddTrackForm';
-import { ImportList, WorkerStatus } from './components/WorkerStatus';
+import { BottomNav, type Tab } from './components/BottomNav';
+import { SearchView } from './components/SearchView';
 import { StatusContext } from './status';
 import { useAppUpdate } from './update';
 import { PlayerBar } from './components/PlayerBar';
 import { PlaylistView } from './components/PlaylistView';
 import { PlaylistsView } from './components/PlaylistsView';
 import { TrackList } from './components/TrackList';
-import { PlayIcon, ShuffleIcon } from './components/icons';
+import { FilterIcon, PlayIcon, ShuffleIcon } from './components/icons';
 import { useOffline } from './offline';
 import { usePlayer } from './player';
 
 type View =
+  | { kind: 'search' }
   | { kind: 'library' }
   | { kind: 'playlists' }
   | { kind: 'playlist'; id: number }
@@ -127,34 +128,48 @@ export function App({ onLogout }: { onLogout?: () => void }) {
   }, [loadTracks]);
 
   const q = query.trim().toLowerCase();
-  const artists = useMemo(() => groupByArtist(tracks), [tracks]);
-  const inLibrary = view.kind === 'library' || view.kind === 'artist';
+  // Biblioteca = o que já dá para ouvir. O que está na fila, baixando ou com erro fica na aba Buscar.
+  const libraryTracks = useMemo(() => tracks.filter((t) => t.status === 'ready'), [tracks]);
+  const artists = useMemo(() => groupByArtist(libraryTracks), [libraryTracks]);
   const visibleTracks = q
-    ? tracks.filter((t) =>
+    ? libraryTracks.filter((t) =>
         `${t.title} ${t.artist ?? ''} ${t.album ?? ''}`.toLowerCase().includes(q),
       )
-    : tracks;
+    : libraryTracks;
+  const tab: Tab =
+    view.kind === 'search'
+      ? 'search'
+      : view.kind === 'library' || view.kind === 'artist'
+        ? 'library'
+        : 'playlists';
+
+  const reloadAll = () => void Promise.all([loadTracks(), loadPlaylists()]);
+  const retryTrack = async (t: Track) => {
+    await api.retryTrack(t.id);
+    await loadTracks();
+  };
+  const deleteTrack = async (t: Track) => {
+    if (!confirm(`Apagar "${t.title}" da biblioteca e de todas as playlists?`)) return;
+    try {
+      await api.deleteTrack(t.id);
+      forget(t.id);
+      await offline.remove([t]);
+    } catch (err) {
+      alert((err as Error).message);
+    }
+    await Promise.all([loadTracks(), loadPlaylists()]);
+  };
 
   return (
     <StatusContext.Provider value={status}>
       <div className="app">
         <header className="top-bar">
           <h1>Pulse</h1>
-          <nav className="tabs">
-            <button
-              className={inLibrary ? 'active' : undefined}
-              onClick={() => setView({ kind: 'library' })}
-            >
-              Biblioteca
+          {onLogout && (
+            <button className="btn" onClick={onLogout}>
+              Sair
             </button>
-            <button
-              className={!inLibrary ? 'active' : undefined}
-              onClick={() => setView({ kind: 'playlists' })}
-            >
-              Playlists
-            </button>
-            {onLogout && <button onClick={onLogout}>Sair</button>}
-          </nav>
+          )}
         </header>
 
         {!offline.online && (
@@ -172,12 +187,31 @@ export function App({ onLogout }: { onLogout?: () => void }) {
         )}
 
         <main className="content">
+          {view.kind === 'search' && (
+            <SearchView
+              tracks={tracks}
+              imports={imports}
+              status={status}
+              onAdded={reloadAll}
+              onImportsChanged={loadTracks}
+              onAddToPlaylist={setAddingTrack}
+              onEdited={reloadAll}
+              onRetry={retryTrack}
+              onRemove={deleteTrack}
+            />
+          )}
+
           {view.kind === 'library' && (
             <>
-              <AddTrackForm onAdded={() => void Promise.all([loadTracks(), loadPlaylists()])} />
-              <WorkerStatus status={status} />
-              <ImportList imports={imports} onChanged={loadTracks} />
-              {tracks.length > 0 && (
+              {!libraryTracks.length && (
+                <div className="empty">
+                  <p>Sua biblioteca está vazia.</p>
+                  <button className="btn primary" onClick={() => setView({ kind: 'search' })}>
+                    Buscar músicas
+                  </button>
+                </div>
+              )}
+              {libraryTracks.length > 0 && (
                 <div className="segmented" role="tablist">
                   <button
                     role="tab"
@@ -197,16 +231,19 @@ export function App({ onLogout }: { onLogout?: () => void }) {
                   </button>
                 </div>
               )}
-              {tracks.length > 5 && (
-                <input
-                  className="search"
-                  type="search"
-                  placeholder={
-                    libraryMode === 'artists' ? 'Buscar artista…' : 'Buscar na biblioteca…'
-                  }
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
+              {libraryTracks.length > 5 && (
+                <div className="filter-field">
+                  <FilterIcon width={18} height={18} aria-hidden />
+                  <input
+                    type="search"
+                    placeholder={
+                      libraryMode === 'artists' ? 'Filtrar artistas…' : 'Filtrar na biblioteca…'
+                    }
+                    aria-label="Filtrar na biblioteca"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                </div>
               )}
               {libraryMode === 'artists' && (
                 <ArtistsGrid
@@ -227,28 +264,13 @@ export function App({ onLogout }: { onLogout?: () => void }) {
                   </button>
                 </div>
               )}
-              {libraryMode === 'songs' && (
+              {libraryMode === 'songs' && libraryTracks.length > 0 && (
                 <TrackList
                   tracks={visibleTracks}
                   onAddToPlaylist={setAddingTrack}
-                  onEdited={() => void Promise.all([loadTracks(), loadPlaylists()])}
-                  onRetry={async (t) => {
-                    await api.retryTrack(t.id);
-                    await loadTracks();
-                  }}
+                  onEdited={reloadAll}
                   removeLabel="Apagar da biblioteca"
-                  onRemove={async (t) => {
-                    if (!confirm(`Apagar "${t.title}" da biblioteca e de todas as playlists?`))
-                      return;
-                    try {
-                      await api.deleteTrack(t.id);
-                      forget(t.id);
-                      await offline.remove([t]);
-                    } catch (err) {
-                      alert((err as Error).message);
-                    }
-                    await Promise.all([loadTracks(), loadPlaylists()]);
-                  }}
+                  onRemove={deleteTrack}
                 />
               )}
             </>
@@ -291,6 +313,15 @@ export function App({ onLogout }: { onLogout?: () => void }) {
         </main>
 
         <PlayerBar />
+        <BottomNav
+          tab={tab}
+          // Pontinho na aba Buscar com download em andamento.
+          searchBadge={busy}
+          onSelect={(t) => {
+            setQuery('');
+            setView({ kind: t });
+          }}
+        />
 
         {addingTrack && (
           <AddToPlaylistDialog
