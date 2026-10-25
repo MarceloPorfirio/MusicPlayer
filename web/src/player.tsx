@@ -21,6 +21,8 @@ interface PlayerContextValue {
   next: () => void;
   prev: () => void;
   seek: (seconds: number) => void;
+  /** Atualiza metadados de uma faixa que já está na fila (após edição). */
+  updateTrack: (track: Track) => void;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -81,6 +83,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (audioRef.current) audioRef.current.currentTime = seconds;
   }, []);
 
+  const updateTrack = useCallback((track: Track) => {
+    setQueue((q) => q.map((t) => (t.id === track.id ? track : t)));
+  }, []);
+
   // Troca de faixa
   useEffect(() => {
     const audio = audioRef.current;
@@ -111,8 +117,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [toggle, next, prev, seek]);
 
   const value = useMemo(
-    () => ({ queue, current, playing, time, duration, playTracks, toggle, next, prev, seek }),
-    [queue, current, playing, time, duration, playTracks, toggle, next, prev, seek],
+    () => ({ queue, current, playing, time, duration, playTracks, toggle, next, prev, seek, updateTrack }),
+    [queue, current, playing, time, duration, playTracks, toggle, next, prev, seek, updateTrack],
   );
 
   return (

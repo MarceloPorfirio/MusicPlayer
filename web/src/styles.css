@@ -112,6 +112,18 @@ input:focus { outline: none; border-color: var(--accent); }
 .add-form .success { flex-basis: 100%; margin: 0; }
 .success { color: var(--accent); }
 
+.import-choice {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.import-choice span { flex-basis: 100%; color: var(--muted); font-size: 0.9rem; }
+
 .search { width: 100%; margin-bottom: 12px; }
 
 .error { color: var(--danger); }
@@ -277,6 +289,12 @@ li.active .cover-overlay { opacity: 1; }
 }
 .dialog-list button:hover { background: var(--surface-2); }
 .dialog .add-form { margin: 0; }
+.dialog .error { margin: 0; }
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field span { color: var(--muted); font-size: 0.85rem; }
+
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 @media (min-width: 640px) {
   .dialog-backdrop { place-items: center; }

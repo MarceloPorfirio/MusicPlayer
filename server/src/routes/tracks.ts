@@ -129,6 +129,7 @@ export async function trackRoutes(app: FastifyInstance) {
       const track = getTrack(Number(req.params.id));
       if (!track) return reply.code(404).send({ error: 'Faixa não encontrada.' });
       const { title = track.title, artist = track.artist, album = track.album } = req.body ?? {};
+      if (!title.trim()) return reply.code(400).send({ error: 'O título não pode ficar vazio.' });
       db.prepare('UPDATE tracks SET title = ?, artist = ?, album = ? WHERE id = ?').run(
         title,
         artist,
