@@ -1,4 +1,4 @@
-<#
+﻿<#
   Faz o worker de downloads iniciar sozinho, escondido, quando você entra no Windows.
 
     powershell -ExecutionPolicy Bypass -File scripts\worker-autostart.ps1           # instala e já inicia
