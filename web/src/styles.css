@@ -248,6 +248,48 @@ li.active .cover-overlay { opacity: 1; }
 .playlist-grid .cover { width: 100% !important; height: auto !important; aspect-ratio: 1; }
 
 .section-title { font-size: 1rem; margin: 20px 0 10px; }
+
+.segmented {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--surface);
+}
+.segmented button {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: none;
+  color: var(--muted);
+}
+.segmented button.active { background: var(--surface-2); color: var(--text); }
+
+.artist-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 16px;
+}
+.artist-grid button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: center;
+}
+.artist-grid .cover { width: 100% !important; height: auto !important; aspect-ratio: 1; border-radius: 50%; }
+.artist-grid .track-title,
+.artist-grid .track-sub { max-width: 100%; }
+.artist-heading { display: flex; align-items: center; gap: 14px; }
+.artist-heading .cover { border-radius: 50%; }
 .smart-grid {
   list-style: none;
   margin: 0;

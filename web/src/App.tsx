@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   api,
   type ImportJob,
@@ -8,6 +8,7 @@ import {
   type SmartSummary,
   type Track,
 } from './api';
+import { ArtistView, ArtistsGrid, groupByArtist } from './components/Artists';
 import { SmartListView } from './components/SmartListView';
 import { FAVORITES_CHANGED } from './history';
 import { AddToPlaylistDialog } from './components/AddToPlaylistDialog';
@@ -27,7 +28,19 @@ type View =
   | { kind: 'library' }
   | { kind: 'playlists' }
   | { kind: 'playlist'; id: number }
-  | { kind: 'smart'; smart: SmartKind };
+  | { kind: 'smart'; smart: SmartKind }
+  | { kind: 'artist'; key: string };
+
+type LibraryMode = 'songs' | 'artists';
+const LIBRARY_MODE_KEY = 'library-mode';
+
+function savedLibraryMode(): LibraryMode {
+  try {
+    return localStorage.getItem(LIBRARY_MODE_KEY) === 'artists' ? 'artists' : 'songs';
+  } catch {
+    return 'songs';
+  }
+}
 
 export function App({ onLogout }: { onLogout?: () => void }) {
   const [view, setView] = useState<View>({ kind: 'library' });
@@ -35,6 +48,16 @@ export function App({ onLogout }: { onLogout?: () => void }) {
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
   const [addingTrack, setAddingTrack] = useState<Track | null>(null);
   const [query, setQuery] = useState('');
+  const [libraryMode, setLibraryMode] = useState<LibraryMode>(savedLibraryMode);
+  const changeLibraryMode = (mode: LibraryMode) => {
+    setLibraryMode(mode);
+    setQuery('');
+    try {
+      localStorage.setItem(LIBRARY_MODE_KEY, mode);
+    } catch {
+      // só não lembra na próxima vez
+    }
+  };
   const { playTracks, forget, playing } = usePlayer();
   const updatePending = useAppUpdate(playing);
   const offline = useOffline();
@@ -96,6 +119,8 @@ export function App({ onLogout }: { onLogout?: () => void }) {
   }, [busy, waitingForPc, loadTracks]);
 
   const q = query.trim().toLowerCase();
+  const artists = useMemo(() => groupByArtist(tracks), [tracks]);
+  const inLibrary = view.kind === 'library' || view.kind === 'artist';
   const visibleTracks = q
     ? tracks.filter((t) =>
         `${t.title} ${t.artist ?? ''} ${t.album ?? ''}`.toLowerCase().includes(q),
@@ -109,13 +134,13 @@ export function App({ onLogout }: { onLogout?: () => void }) {
           <h1>Pulse</h1>
           <nav className="tabs">
             <button
-              className={view.kind === 'library' ? 'active' : undefined}
+              className={inLibrary ? 'active' : undefined}
               onClick={() => setView({ kind: 'library' })}
             >
               Biblioteca
             </button>
             <button
-              className={view.kind !== 'library' ? 'active' : undefined}
+              className={!inLibrary ? 'active' : undefined}
               onClick={() => setView({ kind: 'playlists' })}
             >
               Playlists
@@ -144,16 +169,44 @@ export function App({ onLogout }: { onLogout?: () => void }) {
               <AddTrackForm onAdded={() => void Promise.all([loadTracks(), loadPlaylists()])} />
               <WorkerStatus status={status} />
               <ImportList imports={imports} onChanged={loadTracks} />
+              {tracks.length > 0 && (
+                <div className="segmented" role="tablist">
+                  <button
+                    role="tab"
+                    aria-selected={libraryMode === 'songs'}
+                    className={libraryMode === 'songs' ? 'active' : undefined}
+                    onClick={() => changeLibraryMode('songs')}
+                  >
+                    Músicas
+                  </button>
+                  <button
+                    role="tab"
+                    aria-selected={libraryMode === 'artists'}
+                    className={libraryMode === 'artists' ? 'active' : undefined}
+                    onClick={() => changeLibraryMode('artists')}
+                  >
+                    Artistas
+                  </button>
+                </div>
+              )}
               {tracks.length > 5 && (
                 <input
                   className="search"
                   type="search"
-                  placeholder="Buscar na biblioteca…"
+                  placeholder={
+                    libraryMode === 'artists' ? 'Buscar artista…' : 'Buscar na biblioteca…'
+                  }
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
               )}
-              {visibleTracks.some(offline.canPlay) && (
+              {libraryMode === 'artists' && (
+                <ArtistsGrid
+                  artists={artists.filter((a) => !q || a.name.toLowerCase().includes(q))}
+                  onOpen={(key) => setView({ kind: 'artist', key })}
+                />
+              )}
+              {libraryMode === 'songs' && visibleTracks.some(offline.canPlay) && (
                 <div className="list-actions">
                   <button className="btn primary" onClick={() => playTracks(visibleTracks)}>
                     <PlayIcon width={18} height={18} /> Tocar tudo
@@ -166,29 +219,40 @@ export function App({ onLogout }: { onLogout?: () => void }) {
                   </button>
                 </div>
               )}
-              <TrackList
-                tracks={visibleTracks}
-                onAddToPlaylist={setAddingTrack}
-                onEdited={() => void Promise.all([loadTracks(), loadPlaylists()])}
-                onRetry={async (t) => {
-                  await api.retryTrack(t.id);
-                  await loadTracks();
-                }}
-                removeLabel="Apagar da biblioteca"
-                onRemove={async (t) => {
-                  if (!confirm(`Apagar "${t.title}" da biblioteca e de todas as playlists?`))
-                    return;
-                  try {
-                    await api.deleteTrack(t.id);
-                    forget(t.id);
-                    await offline.remove([t]);
-                  } catch (err) {
-                    alert((err as Error).message);
-                  }
-                  await Promise.all([loadTracks(), loadPlaylists()]);
-                }}
-              />
+              {libraryMode === 'songs' && (
+                <TrackList
+                  tracks={visibleTracks}
+                  onAddToPlaylist={setAddingTrack}
+                  onEdited={() => void Promise.all([loadTracks(), loadPlaylists()])}
+                  onRetry={async (t) => {
+                    await api.retryTrack(t.id);
+                    await loadTracks();
+                  }}
+                  removeLabel="Apagar da biblioteca"
+                  onRemove={async (t) => {
+                    if (!confirm(`Apagar "${t.title}" da biblioteca e de todas as playlists?`))
+                      return;
+                    try {
+                      await api.deleteTrack(t.id);
+                      forget(t.id);
+                      await offline.remove([t]);
+                    } catch (err) {
+                      alert((err as Error).message);
+                    }
+                    await Promise.all([loadTracks(), loadPlaylists()]);
+                  }}
+                />
+              )}
             </>
+          )}
+
+          {view.kind === 'artist' && (
+            <ArtistView
+              artist={artists.find((a) => a.key === view.key)}
+              onBack={() => setView({ kind: 'library' })}
+              onAddToPlaylist={setAddingTrack}
+              onEdited={() => void Promise.all([loadTracks(), loadPlaylists()])}
+            />
           )}
 
           {view.kind === 'playlists' && (
