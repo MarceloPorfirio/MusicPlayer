@@ -37,13 +37,15 @@ npm run build
 npm start        # http://localhost:3000
 ```
 
+Ou com a imagem Docker de produção: `docker compose up --build` (também em `http://localhost:3000`).
+
 ### Variáveis de ambiente (opcionais)
 
 | Variável               | Padrão    | Descrição                                                  |
 | ---------------------- | --------- | ---------------------------------------------------------- |
 | `APP_PASSWORD`         | —         | Senha de acesso. Sem ela o login fica desligado            |
 | `SESSION_SECRET`       | derivado  | Chave que assina o cookie de sessão                        |
-| `TRUST_PROXY`          | `false`   | `true` atrás de Caddy/Nginx                                |
+| `TRUST_PROXY`          | `false`   | `true` atrás de proxy reverso (já vem `true` na imagem)    |
 | `PORT`                 | `3000`    | Porta da API                                               |
 | `HOST`                 | `0.0.0.0` | Interface de rede                                          |
 | `DATA_DIR`             | `./data`  | Onde ficam o banco e os arquivos                           |
@@ -52,33 +54,43 @@ npm start        # http://localhost:3000
 | `FFMPEG_DIR`           | —         | Pasta do ffmpeg, se não estiver no PATH                    |
 | `DOWNLOAD_CONCURRENCY` | `2`       | Downloads simultâneos                                      |
 
-## Deploy na VPS (Docker + Caddy)
+## Deploy na VPS (Coolify)
 
-Pré-requisitos: Docker com o plugin compose, as portas 80 e 443 livres e um domínio com registro **A** apontando para o IP da VPS.
+O deploy segue o padrão da VPS: **o build nunca roda na VPS**. A cada push na `main`, o GitHub Actions ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)) constrói a imagem, publica em `ghcr.io/<dono>/<repo>` (tags `latest` e `sha-xxxxxxx`) e pede o deploy ao Coolify. O Coolify puxa a `latest`, e o Traefik dele cuida do domínio e do HTTPS.
 
-```bash
-git clone <seu-repo> musicplayer && cd musicplayer
-cp .env.example .env    # defina DOMAIN e APP_PASSWORD
-docker compose up -d --build
-```
+### Primeira vez
 
-O Caddy emite o certificado HTTPS sozinho. Abra `https://seu-dominio` no celular, faça login e use **Adicionar à tela inicial** para instalar o app.
+1. **Publique a imagem:** faça o push na `main`. Sem `COOLIFY_APP_UUID` configurado, o workflow só publica e pula o deploy. Se o repositório for privado, o pacote no GHCR também é, e o Coolify vai precisar de credencial do registry (um token do GitHub com `read:packages`).
+2. **DNS:** crie um registro **A** do subdomínio (ex.: `music`) para o IP da VPS. No Cloudflare, use **DNS only** (nuvem cinza): com o proxy laranja, a renovação do certificado trava.
+3. **Coolify:** crie um recurso do tipo **Docker Image** com:
+   - **Imagem:** `ghcr.io/<dono>/<repo>:latest`
+   - **Porta:** `3000`
+   - **Domínio:** `https://music.seudominio.com.br`
+   - **Persistent Storage:** um **volume** montado em `/app/data`. É onde ficam o banco e as músicas, e sem ele tudo some a cada deploy.
+   - **Environment Variables:** as do [.env.example](.env.example), com `APP_PASSWORD` forte
+   - **Nome do container:** único e explícito, nunca `app` ou `web`
+4. **GitHub** (Settings › Secrets and variables › Actions):
+   - **variables:** `COOLIFY_URL`, `COOLIFY_APP_UUID`, `APP_URL`
+   - **secret:** `COOLIFY_TOKEN`
+5. Rode o workflow de novo (aba Actions › Deploy › Run workflow). Ele espera o Coolify terminar e confere se `APP_URL/api/session` responde 200.
 
-- **Atualizar o app:** `git pull && docker compose up -d --build`
-- **Atualizar o yt-dlp:** `docker compose restart app` (ele se atualiza a cada start)
-- **Logs:** `docker compose logs -f app`
-- **Backup:** a pasta `data/`, que contém o banco e as músicas
+Depois, abra o domínio no celular, faça login e use **Adicionar à tela inicial** para instalar o app.
 
-**Se a VPS já tiver Nginx (ou outro serviço) nas portas 80/443:** remova o serviço `caddy` do compose, exponha `ports: ["127.0.0.1:3000:3000"]` no `app` e faça o proxy do seu Nginx para `127.0.0.1:3000`.
+### Rotina
+
+- **Atualizar o app:** é só dar push na `main`.
+- **Rollback:** no Coolify, aponte a imagem para uma tag `sha-xxxxxxx` anterior e faça o deploy.
+- **Atualizar o yt-dlp:** reinicie o container, porque ele se atualiza a cada start.
+- **Backup:** o volume de `/app/data`. O `library.db` é pequeno e é o que importa, porque as músicas podem ser baixadas de novo. O backup do Coolify cobre só bancos gerenciados por ele, não este SQLite.
 
 ### Se o YouTube bloquear o IP da VPS
 
 Se os downloads falharem com *"Sign in to confirm you're not a bot"*:
 
 1. Exporte os cookies de uma conta **secundária** do YouTube (formato Netscape, com uma extensão como "Get cookies.txt LOCALLY").
-2. Salve o arquivo como `data/cookies.txt`.
-3. Use a linha `YTDLP_ARGS` com `--cookies` do `.env.example`.
-4. Rode `docker compose up -d`.
+2. Coloque o arquivo em `cookies.txt` dentro do volume de `/app/data`.
+3. Troque o `YTDLP_ARGS` no Coolify pela versão com `--cookies` do `.env.example`.
+4. Reinicie o container.
 
 Não use a sua conta principal: contas usadas por automação a partir de datacenter podem ser bloqueadas.
 

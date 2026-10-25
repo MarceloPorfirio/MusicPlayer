@@ -1,0 +1,134 @@
+# Deploy na VPS a cada push na main, no padrão da VPS:
+# o Actions constrói a imagem e publica no GHCR; o Coolify puxa a tag `latest` e sobe.
+# Build nunca roda na VPS — são 2 vCPU divididos com os outros apps em produção.
+#
+# Configuração no GitHub (Settings › Secrets and variables › Actions):
+#   variables: COOLIFY_URL       ex.: https://coolify.icoders.com.br
+#              COOLIFY_APP_UUID  uuid do recurso no Coolify
+#              APP_URL           ex.: https://music.seudominio.com.br
+#   secrets:   COOLIFY_TOKEN     token da API do Coolify com permissão de deploy
+#
+# Sem COOLIFY_APP_UUID o job de deploy é pulado: dá para publicar a imagem antes
+# de criar o recurso no Coolify.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    # Só pula quando o push mexe APENAS nestes arquivos.
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
+  workflow_dispatch:
+
+# Dois deploys simultâneos brigariam pelo mesmo recurso no Coolify. Sem
+# cancel-in-progress: um deploy pela metade deixaria o container fora do ar.
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    outputs:
+      tag: ${{ steps.versao.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Define imagem e tag
+        id: versao
+        # GHCR exige nome em minúsculas; a tag pelo sha é o que permite rollback.
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Constrói e publica
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # O Coolify fica fixado em `latest`; a tag sha existe para rollback.
+          tags: |
+            ${{ steps.versao.outputs.image }}:${{ steps.versao.outputs.tag }}
+            ${{ steps.versao.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Resumo
+        run: |
+          echo "Imagem: ${{ steps.versao.outputs.image }}:${{ steps.versao.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: build
+    if: vars.COOLIFY_APP_UUID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Pede o deploy ao Coolify
+        id: pedido
+        # POST, não GET: o endpoint responde 405 no verbo antigo.
+        run: |
+          resposta=$(curl -sS --fail-with-body -X POST \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            "${{ vars.COOLIFY_URL }}/api/v1/deploy?uuid=${{ vars.COOLIFY_APP_UUID }}&force=false")
+          echo "$resposta"
+
+          uuid=$(echo "$resposta" | jq -r '.deployments[0].deployment_uuid // empty')
+          if [ -z "$uuid" ]; then
+            echo "::error::Coolify aceitou a chamada mas não devolveu deployment_uuid"
+            exit 1
+          fi
+          echo "uuid=$uuid" >> "$GITHUB_OUTPUT"
+
+      - name: Acompanha até terminar
+        # A chamada acima só enfileira. Sem acompanhar, o job fecharia verde
+        # com a versão antiga ainda no ar.
+        run: |
+          for tentativa in $(seq 1 60); do
+            status=$(curl -sS \
+              -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+              "${{ vars.COOLIFY_URL }}/api/v1/deployments/${{ steps.pedido.outputs.uuid }}" \
+              | jq -r '.status // "sem-resposta"')
+            echo "[$tentativa/60] $status"
+
+            case "$status" in
+              finished) exit 0 ;;
+              failed|cancelled-by-user)
+                echo "::error::deploy terminou como $status — veja o log no Coolify"
+                exit 1 ;;
+            esac
+            sleep 10
+          done
+
+          echo "::error::deploy não concluiu em 10 min"
+          exit 1
+
+      - name: Confere o site no ar
+        if: vars.APP_URL != ''
+        # /api/session é pública: 200 = app viva atrás do Traefik, com TLS válido.
+        run: |
+          for tentativa in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "${{ vars.APP_URL }}/api/session" || true)
+            echo "[$tentativa/12] ${{ vars.APP_URL }}/api/session -> ${code:-sem resposta}"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+
+          echo "::error::${{ vars.APP_URL }} não respondeu 200 depois do deploy"
+          exit 1

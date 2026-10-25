@@ -1,29 +1,16 @@
+# Para testar a imagem localmente: docker compose up --build → http://localhost:3000
+# Em produção quem sobe o container é o Coolify, a partir da imagem do GHCR
+# (ver "Deploy na VPS" no README). HTTPS e domínio ficam com o Traefik dele.
 services:
-  app:
+  musicplayer:
     build: .
-    restart: unless-stopped
-    env_file: .env
+    container_name: musicplayer-local
+    env_file:
+      - path: .env
+        required: false
     environment:
-      TRUST_PROXY: "true"
+      TRUST_PROXY: "false"
+    ports:
+      - "3000:3000"
     volumes:
       - ./data:/app/data
-
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    environment:
-      DOMAIN: ${DOMAIN:?defina DOMAIN no .env}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-
-volumes:
-  caddy_data:
-  caddy_config:
