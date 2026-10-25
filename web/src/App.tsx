@@ -73,7 +73,7 @@ export function App({ onLogout }: { onLogout?: () => void }) {
     <StatusContext.Provider value={status}>
       <div className="app">
         <header className="top-bar">
-          <h1>MusicPlayer</h1>
+          <h1>Pulse</h1>
           <nav className="tabs">
             <button
               className={view.kind === 'library' ? 'active' : undefined}

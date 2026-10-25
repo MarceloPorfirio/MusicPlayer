@@ -59,7 +59,7 @@ export function AuthGate({ children }: Props) {
     <div className="login">
       <form className="login-card" onSubmit={submit}>
         <img src="/icon.svg" alt="" width={64} height={64} />
-        <h1>MusicPlayer</h1>
+        <h1>Pulse</h1>
         <input
           type="password"
           placeholder="Senha"

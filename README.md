@@ -1,4 +1,4 @@
-# MusicPlayer
+# Pulse
 
 PWA pessoal de músicas: cole a URL de um vídeo do YouTube (ou de outro site suportado pelo [yt-dlp](https://github.com/yt-dlp/yt-dlp)). O servidor baixa só o áudio em `.m4a` com capa e metadados, e você monta sua biblioteca e playlists.
 

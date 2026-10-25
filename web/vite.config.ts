@@ -13,8 +13,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'favicon.ico', 'apple-touch-icon-180x180.png'],
       manifest: {
-        name: 'MusicPlayer',
-        short_name: 'Music',
+        name: 'Pulse',
+        short_name: 'Pulse',
         description: 'Sua biblioteca de músicas pessoal',
         lang: 'pt-BR',
         theme_color: '#121212',

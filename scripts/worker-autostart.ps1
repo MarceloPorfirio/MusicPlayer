@@ -12,7 +12,11 @@ param([switch]$Remove)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $vbs = Join-Path $PSScriptRoot 'worker-hidden.vbs'
-$shortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'MusicPlayer Worker.lnk'
+$startup = [Environment]::GetFolderPath('Startup')
+$shortcut = Join-Path $startup 'Pulse Worker.lnk'
+# Nome do atalho antes do app se chamar Pulse: removido ao instalar/remover.
+$legacyShortcut = Join-Path $startup 'MusicPlayer Worker.lnk'
+if (Test-Path $legacyShortcut) { Remove-Item $legacyShortcut }
 
 function Stop-Worker {
   # O .vbs abre "cmd /c npm run worker": encerrando esse cmd com a árvore, vão junto o npm e o node.
@@ -44,7 +48,7 @@ $lnk = $wsh.CreateShortcut($shortcut)
 $lnk.TargetPath = "$env:WINDIR\System32\wscript.exe"
 $lnk.Arguments = "`"$vbs`""
 $lnk.WorkingDirectory = $root
-$lnk.Description = 'Worker de downloads do MusicPlayer'
+$lnk.Description = 'Worker de downloads do Pulse'
 $lnk.Save()
 Write-Host "Atalho criado em: $shortcut"
 
