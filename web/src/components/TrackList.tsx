@@ -23,6 +23,7 @@ import { useOffline } from '../offline';
 import { usePlayer } from '../player';
 import { Cover } from './Cover';
 import { EditTrackDialog } from './EditTrackDialog';
+import { Equalizer } from './Visualizer';
 import {
   DownloadIcon,
   DragIcon,
@@ -218,7 +219,14 @@ function RowBody({ track: t, tracks, onRetry, onMenu }: RowProps) {
           <Cover trackId={t.hasCover ? t.id : null} />
           {playable && (
             <span className="cover-overlay">
-              {isCurrent && playing ? <PauseIcon /> : <PlayIcon />}
+              {isCurrent && playing ? (
+                <>
+                  <Equalizer playing />
+                  <PauseIcon className="hover-only" />
+                </>
+              ) : (
+                <PlayIcon />
+              )}
             </span>
           )}
         </span>

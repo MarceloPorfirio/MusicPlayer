@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { audioUrl, coverUrl, type Track } from './api';
 import { useOffline } from './offline';
@@ -36,6 +37,8 @@ interface PlayerContextValue {
   cycleRepeat: () => void;
   /** Atualiza metadados de uma faixa que já está na fila (após edição). */
   updateTrack: (track: Track) => void;
+  /** Elemento <audio>, para o visualizador. */
+  audioRef: RefObject<HTMLAudioElement | null>;
 }
 
 const PlayerContext = createContext<PlayerContextValue | null>(null);
@@ -301,6 +304,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       toggleShuffle,
       cycleRepeat,
       updateTrack,
+      audioRef,
     }),
     [
       queue,

@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { formatTime } from '../api';
+import { coverUrl, formatTime } from '../api';
 import { usePlayer } from '../player';
 import { Cover } from './Cover';
+import { Visualizer } from './Visualizer';
 import {
   ChevronDownIcon,
   CloseIcon,
@@ -19,6 +20,7 @@ const REPEAT_LABEL = { off: 'Repetir: desligado', all: 'Repetir: fila', one: 'Re
 export function NowPlaying({ onClose }: { onClose: () => void }) {
   const p = usePlayer();
 
+  const pulseRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
@@ -34,9 +36,11 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
 
   if (!p.current) return null;
   const upNext = p.queue.slice(p.index + 1);
+  const cover = p.current.hasCover ? coverUrl(p.current.id) : null;
 
   return (
     <div className="now-playing" role="dialog" aria-modal aria-label="Tocando agora">
+      {cover && <img className="np-backdrop" src={cover} alt="" aria-hidden />}
       <header className="np-header">
         <button className="icon-btn" onClick={close} aria-label="Fechar">
           <ChevronDownIcon />
@@ -47,8 +51,11 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
 
       <div className="np-main">
         <div className="np-cover">
-          <Cover trackId={p.current.hasCover ? p.current.id : null} size={320} />
+          <div className="np-pulse" ref={pulseRef}>
+            <Cover trackId={p.current.hasCover ? p.current.id : null} size={320} />
+          </div>
         </div>
+        <Visualizer audioRef={p.audioRef} playing={p.playing} pulseRef={pulseRef} />
         <div className="np-info">
           <span className="np-title">{p.current.title}</span>
           <span className="track-sub">{p.current.artist ?? 'Artista desconhecido'}</span>
