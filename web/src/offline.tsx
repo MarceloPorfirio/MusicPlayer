@@ -20,6 +20,10 @@ interface OfflineContextValue {
   canPlay: (track: Track) => boolean;
   save: (tracks: Track[]) => Promise<void>;
   remove: (tracks: Track[]) => Promise<void>;
+  /** Apaga todos os áudios salvos no aparelho. */
+  clearAll: () => Promise<void>;
+  /** Espaço usado pelo app no aparelho (bytes) e o disponível, quando o navegador informa. */
+  storage: { usage: number; quota: number } | null;
 }
 
 const OfflineContext = createContext<OfflineContextValue | null>(null);
@@ -91,14 +95,29 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const clearAll = useCallback(async () => {
+    if (!supported) return;
+    await caches.delete(OFFLINE_AUDIO_CACHE);
+    setSaved(new Set());
+  }, []);
+
+  // Recalcula o espaço usado sempre que o conjunto de faixas salvas muda.
+  const [storage, setStorage] = useState<OfflineContextValue['storage']>(null);
+  useEffect(() => {
+    navigator.storage
+      ?.estimate?.()
+      .then(({ usage, quota }) => setStorage({ usage: usage ?? 0, quota: quota ?? 0 }))
+      .catch(() => setStorage(null));
+  }, [saved]);
+
   const canPlay = useCallback(
     (track: Track) => track.status === 'ready' && (online || saved.has(track.id)),
     [online, saved],
   );
 
   const value = useMemo(
-    () => ({ saved, saving, online, canPlay, save, remove }),
-    [saved, saving, online, canPlay, save, remove],
+    () => ({ saved, saving, online, canPlay, save, remove, clearAll, storage }),
+    [saved, saving, online, canPlay, save, remove, clearAll, storage],
   );
   return <OfflineContext.Provider value={value}>{children}</OfflineContext.Provider>;
 }

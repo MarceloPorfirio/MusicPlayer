@@ -480,6 +480,19 @@ li.active .cover-overlay { opacity: 1; }
   color: var(--accent);
 }
 
+.storage-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.storage-card > span { display: flex; flex-direction: column; min-width: 0; }
+.storage-card .track-sub { white-space: normal; }
+
 .offline-banner {
   margin: 0 16px 8px;
   padding: 8px 12px;

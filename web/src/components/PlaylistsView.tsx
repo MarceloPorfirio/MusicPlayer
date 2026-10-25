@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { api, type PlaylistSummary } from '../api';
+import { api, formatBytes, type PlaylistSummary } from '../api';
+import { useOffline } from '../offline';
 import { Cover } from './Cover';
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 
 export function PlaylistsView({ playlists, onOpen, onChanged }: Props) {
   const [name, setName] = useState('');
+  const offline = useOffline();
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -27,6 +29,31 @@ export function PlaylistsView({ playlists, onOpen, onChanged }: Props) {
           Criar
         </button>
       </form>
+      {offline.saved.size > 0 && (
+        <div className="storage-card">
+          <span>
+            <strong>
+              {offline.saved.size} música{offline.saved.size === 1 ? '' : 's'} no aparelho
+            </strong>
+            {offline.storage && (
+              <span className="track-sub">
+                App usando {formatBytes(offline.storage.usage)}
+                {offline.storage.quota > 0 && ` de ${formatBytes(offline.storage.quota)} disponíveis`}
+              </span>
+            )}
+          </span>
+          <button
+            className="btn danger"
+            onClick={() => {
+              if (confirm('Apagar todas as músicas baixadas no aparelho? Elas continuam na biblioteca.')) {
+                void offline.clearAll();
+              }
+            }}
+          >
+            Liberar espaço
+          </button>
+        </div>
+      )}
       {!playlists.length && <p className="empty">Nenhuma playlist ainda.</p>}
       <ul className="playlist-grid">
         {playlists.map((p) => (

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { api, type ImportResult } from '../api';
+import { useOffline } from '../offline';
 
 function describeResult(result: ImportResult) {
   if (result.kind === 'track') return null;
@@ -29,6 +30,7 @@ export function AddTrackForm({ onAdded }: { onAdded: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [choice, setChoice] = useState<{ video: string; playlist: string } | null>(null);
+  const { online } = useOffline();
 
   async function runImport(target: string) {
     setChoice(null);
@@ -61,15 +63,17 @@ export function AddTrackForm({ onAdded }: { onAdded: () => void }) {
       <input
         type="url"
         inputMode="url"
-        placeholder="URL de um vídeo ou playlist do YouTube…"
+        placeholder={
+          online ? 'URL de um vídeo ou playlist do YouTube…' : 'Sem conexão: não dá para adicionar agora'
+        }
         value={url}
         onChange={(e) => {
           setUrl(e.target.value);
           setChoice(null);
         }}
-        disabled={busy}
+        disabled={busy || !online}
       />
-      <button type="submit" className="btn primary" disabled={busy || !url.trim()}>
+      <button type="submit" className="btn primary" disabled={busy || !online || !url.trim()}>
         {busy ? 'Buscando…' : 'Adicionar'}
       </button>
       {choice && (

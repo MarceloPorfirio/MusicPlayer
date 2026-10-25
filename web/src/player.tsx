@@ -37,6 +37,8 @@ interface PlayerContextValue {
   cycleRepeat: () => void;
   /** Atualiza metadados de uma faixa que já está na fila (após edição). */
   updateTrack: (track: Track) => void;
+  /** Tira a faixa da fila (ex.: apagada da biblioteca); se tocava, segue para a próxima. */
+  forget: (trackId: number) => void;
   /** Elemento <audio>, para o visualizador. */
   audioRef: RefObject<HTMLAudioElement | null>;
 }
@@ -224,6 +226,35 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setOriginal(swap);
   }, []);
 
+  const forget = useCallback(
+    (trackId: number) => {
+      if (!queue.some((t) => t.id === trackId)) return;
+      const remaining = queue.filter((t) => t.id !== trackId);
+      // Quantas faixas restantes vinham antes da atual: é o novo índice dela (ou da seguinte).
+      const before = queue.slice(0, index).filter((t) => t.id !== trackId).length;
+      setOriginal((o) => o.filter((t) => t.id !== trackId));
+      setQueue(remaining);
+
+      if (current?.id !== trackId) {
+        setIndex(before);
+        return;
+      }
+      const audio = audioRef.current;
+      const wasPlaying = audio ? !audio.paused : false;
+      audio?.pause();
+      audio?.removeAttribute('src');
+      audio?.load();
+      if (before < remaining.length) {
+        autoplayRef.current = wasPlaying;
+        setIndex(before);
+      } else {
+        setIndex(remaining.length ? remaining.length - 1 : -1);
+        autoplayRef.current = false;
+      }
+    },
+    [queue, index, current],
+  );
+
   // Troca de faixa
   useEffect(() => {
     const audio = audioRef.current;
@@ -304,9 +335,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       toggleShuffle,
       cycleRepeat,
       updateTrack,
+      forget,
       audioRef,
     }),
     [
+      forget,
       queue,
       index,
       current,

@@ -18,7 +18,7 @@ export function App({ onLogout }: { onLogout?: () => void }) {
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
   const [addingTrack, setAddingTrack] = useState<Track | null>(null);
   const [query, setQuery] = useState('');
-  const { playTracks } = usePlayer();
+  const { playTracks, forget } = usePlayer();
   const offline = useOffline();
 
   const loadTracks = useCallback(() => api.tracks().then(setTracks), []);
@@ -106,6 +106,7 @@ export function App({ onLogout }: { onLogout?: () => void }) {
                 if (!confirm(`Apagar "${t.title}" da biblioteca e de todas as playlists?`)) return;
                 try {
                   await api.deleteTrack(t.id);
+                  forget(t.id);
                   await offline.remove([t]);
                 } catch (err) {
                   alert((err as Error).message);

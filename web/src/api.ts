@@ -86,6 +86,12 @@ export const api = {
 export const audioUrl = (id: number) => `/api/tracks/${id}/audio`;
 export const coverUrl = (id: number) => `/api/tracks/${id}/cover`;
 
+export function formatBytes(bytes: number) {
+  if (bytes < 1024 ** 2) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes < 1024 ** 3) return `${Math.round(bytes / 1024 ** 2)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(1).replace('.', ',')} GB`;
+}
+
 export function formatTime(seconds: number | null | undefined) {
   if (!seconds || !Number.isFinite(seconds)) return '0:00';
   const s = Math.floor(seconds);
