@@ -480,6 +480,9 @@ li.active .cover-overlay { opacity: 1; }
   color: var(--accent);
 }
 
+.update-banner { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.update-banner .btn { padding: 6px 14px; }
+
 .worker-status {
   display: flex;
   align-items: center;

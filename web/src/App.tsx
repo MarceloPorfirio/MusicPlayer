@@ -4,6 +4,7 @@ import { AddToPlaylistDialog } from './components/AddToPlaylistDialog';
 import { AddTrackForm } from './components/AddTrackForm';
 import { ImportList, WorkerStatus } from './components/WorkerStatus';
 import { StatusContext } from './status';
+import { useAppUpdate } from './update';
 import { PlayerBar } from './components/PlayerBar';
 import { PlaylistView } from './components/PlaylistView';
 import { PlaylistsView } from './components/PlaylistsView';
@@ -20,7 +21,8 @@ export function App({ onLogout }: { onLogout?: () => void }) {
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
   const [addingTrack, setAddingTrack] = useState<Track | null>(null);
   const [query, setQuery] = useState('');
-  const { playTracks, forget } = usePlayer();
+  const { playTracks, forget, playing } = usePlayer();
+  const updatePending = useAppUpdate(playing);
   const offline = useOffline();
 
   const [status, setStatus] = useState<ServerStatus | null>(null);
@@ -92,6 +94,14 @@ export function App({ onLogout }: { onLogout?: () => void }) {
         {!offline.online && (
           <div className="offline-banner">
             Sem conexão: tocando só as músicas baixadas no aparelho.
+          </div>
+        )}
+        {updatePending && (
+          <div className="offline-banner update-banner">
+            Nova versão disponível.
+            <button className="btn primary" onClick={() => window.location.reload()}>
+              Atualizar
+            </button>
           </div>
         )}
 

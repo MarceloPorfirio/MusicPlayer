@@ -111,7 +111,9 @@ export async function workerRoutes(app: FastifyInstance) {
     w.post<IdParams & { Body: { percent?: number } }>(
       '/api/worker/tracks/:id/progress',
       async (req, reply) => {
-        progress.set(Number(req.params.id), Number(req.body?.percent) || 0);
+        // Um aviso de progresso atrasado pode chegar depois do áudio: só vale durante o download.
+        const track = getTrack(Number(req.params.id));
+        if (track?.status === 'downloading') progress.set(track.id, Number(req.body?.percent) || 0);
         return reply.code(204).send();
       },
     );

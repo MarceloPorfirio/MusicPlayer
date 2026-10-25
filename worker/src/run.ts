@@ -84,21 +84,19 @@ async function handleImport(job: Job) {
 async function handleTrack(job: Job) {
   log(`Baixando faixa ${job.id}: ${job.url}`);
   const dir = await mkdtemp(path.join(os.tmpdir(), 'musicplayer-worker-'));
+  // Manda o percentual mais recente a cada segundo (o yt-dlp emite muitas linhas por segundo,
+  // e mandar só a primeira de cada janela deixava o app parado em 0%).
+  let latest: number | null = null;
+  const reporter = setInterval(() => {
+    if (latest === null) return;
+    const percent = latest;
+    latest = null;
+    api('POST', `/api/worker/tracks/${job.id}/progress`, { percent }).catch(() => {});
+  }, 1000);
   try {
-    let lastReport = 0;
     let files;
     try {
-      files = await downloadAudio(
-        job.url,
-        `track-${job.id}`,
-        (percent) => {
-          const now = Date.now();
-          if (now - lastReport < 1500) return;
-          lastReport = now;
-          api('POST', `/api/worker/tracks/${job.id}/progress`, { percent }).catch(() => {});
-        },
-        dir,
-      );
+      files = await downloadAudio(job.url, `track-${job.id}`, (percent) => (latest = percent), dir);
     } catch (err) {
       log(`  falhou: ${(err as Error).message}`);
       await withRetry('aviso de erro', () =>
@@ -120,6 +118,7 @@ async function handleTrack(job: Job) {
     );
     log(`  pronta (${(audio.length / 1024 / 1024).toFixed(1)} MB)`);
   } finally {
+    clearInterval(reporter);
     await rm(dir, { recursive: true, force: true });
   }
 }
