@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { audioUrl, coverUrl, type Track } from './api';
 import { OFFLINE_AUDIO_CACHE } from './cacheNames';
+import { flushPendingPlays } from './history';
 
 interface OfflineContextValue {
   /** Ids das faixas salvas no aparelho. */
@@ -49,7 +50,12 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
         .then((cache) => cache.keys())
         .then((keys) => setSaved(new Set(keys.map((r) => idFromUrl(r.url)))));
     }
-    const update = () => setOnline(navigator.onLine);
+    // Reproduções ouvidas sem internet vão para o histórico quando a conexão volta.
+    if (navigator.onLine) void flushPendingPlays();
+    const update = () => {
+      setOnline(navigator.onLine);
+      if (navigator.onLine) void flushPendingPlays();
+    };
     window.addEventListener('online', update);
     window.addEventListener('offline', update);
     return () => {

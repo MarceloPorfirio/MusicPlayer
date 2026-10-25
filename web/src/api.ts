@@ -10,6 +10,7 @@ export interface Track {
   error: string | null;
   progress: number | null;
   hasCover: boolean;
+  favorite: boolean;
   sourceUrl: string;
   createdAt: string;
 }
@@ -19,6 +20,22 @@ export interface PlaylistSummary {
   name: string;
   trackCount: number;
   coverTrackId: number | null;
+}
+
+export type SmartKind = 'favorites' | 'recent' | 'top';
+
+/** Lista automática (Favoritas, Tocadas recentemente, Mais tocadas). */
+export interface SmartSummary {
+  kind: SmartKind;
+  name: string;
+  trackCount: number;
+  coverTrackId: number | null;
+}
+
+export interface SmartList {
+  kind: SmartKind;
+  name: string;
+  tracks: Track[];
 }
 
 export interface Playlist {
@@ -111,6 +128,13 @@ export const api = {
   retryTrack: (id: number) => request<Track>('POST', `/api/tracks/${id}/retry`),
   deleteTrack: (id: number) => request<void>('DELETE', `/api/tracks/${id}`),
 
+  setFavorite: (id: number, favorite: boolean) =>
+    request<Track>('POST', `/api/tracks/${id}/favorite`, { favorite }),
+  recordPlay: (id: number, playedAt?: string) =>
+    request<void>('POST', `/api/tracks/${id}/play`, { playedAt }),
+  smartLists: () => request<SmartSummary[]>('GET', '/api/smart'),
+  smartList: (kind: SmartKind) => request<SmartList>('GET', `/api/smart/${kind}`),
+
   playlists: () => request<PlaylistSummary[]>('GET', '/api/playlists'),
   playlist: (id: number) => request<Playlist>('GET', `/api/playlists/${id}`),
   createPlaylist: (name: string) => request<PlaylistSummary>('POST', '/api/playlists', { name }),
@@ -126,6 +150,8 @@ export const api = {
 
 export const audioUrl = (id: number) => `/api/tracks/${id}/audio`;
 export const coverUrl = (id: number) => `/api/tracks/${id}/cover`;
+
+export const songCount = (n: number) => `${n} música${n === 1 ? '' : 's'}`;
 
 export function formatBytes(bytes: number) {
   if (bytes < 1024 ** 2) return `${Math.round(bytes / 1024)} KB`;

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { api, type PlaylistSummary, type Track } from '../api';
+import { api, songCount, type PlaylistSummary, type Track } from '../api';
 
 interface Props {
   track: Track;
@@ -42,7 +42,7 @@ export function AddToPlaylistDialog({ track, playlists, onClose, onChanged }: Pr
           {playlists.map((p) => (
             <li key={p.id}>
               <button onClick={() => add(p.id)}>
-                {p.name} <span className="track-sub">{p.trackCount} músicas</span>
+                {p.name} <span className="track-sub">{songCount(p.trackCount)}</span>
               </button>
             </li>
           ))}

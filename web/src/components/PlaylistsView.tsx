@@ -1,15 +1,27 @@
 import { useState, type FormEvent } from 'react';
-import { api, formatBytes, type PlaylistSummary } from '../api';
+import {
+  api,
+  formatBytes,
+  songCount,
+  type PlaylistSummary,
+  type SmartKind,
+  type SmartSummary,
+} from '../api';
 import { useOffline } from '../offline';
 import { Cover } from './Cover';
+import { HeartIcon, HistoryIcon, TrendingIcon } from './icons';
+
+const SMART_ICONS = { favorites: HeartIcon, recent: HistoryIcon, top: TrendingIcon };
 
 interface Props {
   playlists: PlaylistSummary[];
+  smart: SmartSummary[];
   onOpen: (id: number) => void;
+  onOpenSmart: (kind: SmartKind) => void;
   onChanged: () => void;
 }
 
-export function PlaylistsView({ playlists, onOpen, onChanged }: Props) {
+export function PlaylistsView({ playlists, smart, onOpen, onOpenSmart, onChanged }: Props) {
   const [name, setName] = useState('');
   const offline = useOffline();
 
@@ -24,7 +36,11 @@ export function PlaylistsView({ playlists, onOpen, onChanged }: Props) {
   return (
     <>
       <form className="add-form" onSubmit={create}>
-        <input placeholder="Nome da nova playlist…" value={name} onChange={(e) => setName(e.target.value)} />
+        <input
+          placeholder="Nome da nova playlist…"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
         <button className="btn primary" disabled={!name.trim()}>
           Criar
         </button>
@@ -38,14 +54,19 @@ export function PlaylistsView({ playlists, onOpen, onChanged }: Props) {
             {offline.storage && (
               <span className="track-sub">
                 App usando {formatBytes(offline.storage.usage)}
-                {offline.storage.quota > 0 && ` de ${formatBytes(offline.storage.quota)} disponíveis`}
+                {offline.storage.quota > 0 &&
+                  ` de ${formatBytes(offline.storage.quota)} disponíveis`}
               </span>
             )}
           </span>
           <button
             className="btn danger"
             onClick={() => {
-              if (confirm('Apagar todas as músicas baixadas no aparelho? Elas continuam na biblioteca.')) {
+              if (
+                confirm(
+                  'Apagar todas as músicas baixadas no aparelho? Elas continuam na biblioteca.',
+                )
+              ) {
                 void offline.clearAll();
               }
             }}
@@ -54,6 +75,23 @@ export function PlaylistsView({ playlists, onOpen, onChanged }: Props) {
           </button>
         </div>
       )}
+      <h3 className="section-title">Para você</h3>
+      <ul className="smart-grid">
+        {smart.map((s) => {
+          const Icon = SMART_ICONS[s.kind];
+          return (
+            <li key={s.kind}>
+              <button className={`smart-card ${s.kind}`} onClick={() => onOpenSmart(s.kind)}>
+                <Icon width={28} height={28} />
+                <span className="track-title">{s.name}</span>
+                <span className="track-sub">{songCount(s.trackCount)}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <h3 className="section-title">Suas playlists</h3>
       {!playlists.length && <p className="empty">Nenhuma playlist ainda.</p>}
       <ul className="playlist-grid">
         {playlists.map((p) => (
@@ -61,7 +99,7 @@ export function PlaylistsView({ playlists, onOpen, onChanged }: Props) {
             <button onClick={() => onOpen(p.id)}>
               <Cover trackId={p.coverTrackId} size={140} />
               <span className="track-title">{p.name}</span>
-              <span className="track-sub">{p.trackCount} músicas</span>
+              <span className="track-sub">{songCount(p.trackCount)}</span>
             </button>
           </li>
         ))}

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { coverUrl, formatTime } from '../api';
 import { usePlayer } from '../player';
 import { Cover } from './Cover';
+import { FavoriteButton } from './FavoriteButton';
 import { Visualizer } from './Visualizer';
 import {
   ChevronDownIcon,
@@ -56,9 +57,12 @@ export function NowPlaying({ onClose }: { onClose: () => void }) {
           </div>
         </div>
         <Visualizer audioRef={p.audioRef} playing={p.playing} pulseRef={pulseRef} />
-        <div className="np-info">
-          <span className="np-title">{p.current.title}</span>
-          <span className="track-sub">{p.current.artist ?? 'Artista desconhecido'}</span>
+        <div className="np-info-row">
+          <div className="np-info">
+            <span className="np-title">{p.current.title}</span>
+            <span className="track-sub">{p.current.artist ?? 'Artista desconhecido'}</span>
+          </div>
+          <FavoriteButton track={p.current} />
         </div>
 
         <input

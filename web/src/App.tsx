@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, type ImportJob, type PlaylistSummary, type ServerStatus, type Track } from './api';
+import {
+  api,
+  type ImportJob,
+  type PlaylistSummary,
+  type ServerStatus,
+  type SmartKind,
+  type SmartSummary,
+  type Track,
+} from './api';
+import { SmartListView } from './components/SmartListView';
+import { FAVORITES_CHANGED } from './history';
 import { AddToPlaylistDialog } from './components/AddToPlaylistDialog';
 import { AddTrackForm } from './components/AddTrackForm';
 import { ImportList, WorkerStatus } from './components/WorkerStatus';
@@ -13,7 +23,11 @@ import { PlayIcon, ShuffleIcon } from './components/icons';
 import { useOffline } from './offline';
 import { usePlayer } from './player';
 
-type View = { kind: 'library' } | { kind: 'playlists' } | { kind: 'playlist'; id: number };
+type View =
+  | { kind: 'library' }
+  | { kind: 'playlists' }
+  | { kind: 'playlist'; id: number }
+  | { kind: 'smart'; smart: SmartKind };
 
 export function App({ onLogout }: { onLogout?: () => void }) {
   const [view, setView] = useState<View>({ kind: 'library' });
@@ -29,7 +43,22 @@ export function App({ onLogout }: { onLogout?: () => void }) {
   const [imports, setImports] = useState<ImportJob[]>([]);
   const importsCount = useRef(0);
 
-  const loadPlaylists = useCallback(() => api.playlists().then(setPlaylists), []);
+  const [smart, setSmart] = useState<SmartSummary[]>([]);
+  // Playlists e os cartões das listas automáticas (que mudam a cada música ouvida).
+  const loadPlaylists = useCallback(
+    () =>
+      Promise.all([
+        api.playlists().then(setPlaylists),
+        api
+          .smartLists()
+          .then(setSmart)
+          .catch(() => {}),
+      ]),
+    [],
+  );
+  useEffect(() => {
+    if (view.kind === 'playlists') void loadPlaylists();
+  }, [view.kind, loadPlaylists]);
   /** Biblioteca + URLs aguardando o PC + status do worker. */
   const loadTracks = useCallback(async () => {
     const [t, i, s] = await Promise.all([
@@ -48,6 +77,10 @@ export function App({ onLogout }: { onLogout?: () => void }) {
   useEffect(() => {
     void loadTracks();
     void loadPlaylists();
+    // Curtir/descurtir em qualquer tela atualiza a biblioteca e o cartão de Favoritas.
+    const onFavorites = () => void Promise.all([loadTracks(), loadPlaylists()]);
+    window.addEventListener(FAVORITES_CHANGED, onFavorites);
+    return () => window.removeEventListener(FAVORITES_CHANGED, onFavorites);
   }, [loadTracks, loadPlaylists]);
 
   // Enquanto houver downloads ou URLs em andamento, atualiza a lista periodicamente.
@@ -161,8 +194,18 @@ export function App({ onLogout }: { onLogout?: () => void }) {
           {view.kind === 'playlists' && (
             <PlaylistsView
               playlists={playlists}
+              smart={smart}
               onOpen={(id) => setView({ kind: 'playlist', id })}
+              onOpenSmart={(kind) => setView({ kind: 'smart', smart: kind })}
               onChanged={loadPlaylists}
+            />
+          )}
+
+          {view.kind === 'smart' && (
+            <SmartListView
+              kind={view.smart}
+              onBack={() => setView({ kind: 'playlists' })}
+              onAddToPlaylist={setAddingTrack}
             />
           )}
 

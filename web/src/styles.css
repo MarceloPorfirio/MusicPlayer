@@ -247,6 +247,39 @@ li.active .cover-overlay { opacity: 1; }
 }
 .playlist-grid .cover { width: 100% !important; height: auto !important; aspect-ratio: 1; }
 
+.section-title { font-size: 1rem; margin: 20px 0 10px; }
+.smart-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.smart-card {
+  width: 100%;
+  min-height: 112px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius);
+  text-align: left;
+  color: #fff;
+}
+.smart-card svg { margin-bottom: auto; opacity: 0.9; }
+.smart-card .track-title { font-weight: 600; white-space: normal; line-height: 1.2; }
+.smart-card .track-sub { color: rgb(255 255 255 / 0.75); }
+.smart-card.favorites { background: linear-gradient(135deg, #7b2ff7, #c2185b); }
+.smart-card.recent { background: linear-gradient(135deg, #1565c0, #00838f); }
+.smart-card.top { background: linear-gradient(135deg, #e65100, #c62828); }
+
+.np-info-row { display: flex; align-items: center; gap: 8px; }
+.np-info-row .np-info { flex: 1; }
+
 .playlist-header { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
 .playlist-header .btn:first-child { align-self: flex-start; }
 .playlist-header h2 { margin: 0; }

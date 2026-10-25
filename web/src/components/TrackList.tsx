@@ -21,6 +21,7 @@ import { useState, type ReactNode } from 'react';
 import { formatTime, type Track } from '../api';
 import { useOffline } from '../offline';
 import { usePlayer } from '../player';
+import { setFavorite } from '../history';
 import { pendingLabel, useServerStatus } from '../status';
 import { Cover } from './Cover';
 import { EditTrackDialog } from './EditTrackDialog';
@@ -29,6 +30,8 @@ import {
   DownloadIcon,
   DragIcon,
   EditIcon,
+  HeartIcon,
+  HeartOutlineIcon,
   MoreIcon,
   PauseIcon,
   PlayIcon,
@@ -45,8 +48,8 @@ interface Props {
   onAddToPlaylist?: (track: Track) => void;
   /** Mostra a opção de editar; chamado depois de salvar. */
   onEdited?: () => void;
-  onRemove: (track: Track) => void;
-  removeLabel: string;
+  onRemove?: (track: Track) => void;
+  removeLabel?: string;
   onRetry?: (track: Track) => void;
   /** Ativa arrastar para reordenar; recebe a lista na nova ordem. */
   onReorder?: (tracks: Track[]) => void;
@@ -159,8 +162,15 @@ interface RowProps {
 }
 
 function SortableRow({ track, rowClass, ...rest }: RowProps) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: track.id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: track.id });
   return (
     <li
       ref={setNodeRef}
@@ -185,7 +195,8 @@ function RowBody({ track: t, tracks, onRetry, onMenu }: RowProps) {
   const { current, playing, playTracks, toggle } = usePlayer();
   const status = useServerStatus();
   // PC desconectado no meio de um download: a faixa volta à fila quando ele reconectar.
-  const stalled = t.status === 'downloading' && status?.downloadMode === 'worker' && !status.worker.online;
+  const stalled =
+    t.status === 'downloading' && status?.downloadMode === 'worker' && !status.worker.online;
   const offline = useOffline();
   const playable = offline.canPlay(t);
   const isCurrent = current?.id === t.id;
@@ -262,8 +273,8 @@ interface MenuProps {
   onClose: () => void;
   onAddToPlaylist?: (track: Track) => void;
   onEdit?: (track: Track) => void;
-  onRemove: (track: Track) => void;
-  removeLabel: string;
+  onRemove?: (track: Track) => void;
+  removeLabel?: string;
 }
 
 function TrackMenu({ track, onClose, onAddToPlaylist, onEdit, onRemove, removeLabel }: MenuProps) {
@@ -304,6 +315,26 @@ function TrackMenu({ track, onClose, onAddToPlaylist, onEdit, onRemove, removeLa
               </li>
             </>
           )}
+          <li>
+            <button
+              disabled={!offline.online}
+              onClick={pick(() =>
+                setFavorite(track, !track.favorite)
+                  .then(player.updateTrack)
+                  .catch(() => {}),
+              )}
+            >
+              {track.favorite ? (
+                <>
+                  <HeartIcon /> Remover das favoritas
+                </>
+              ) : (
+                <>
+                  <HeartOutlineIcon /> Curtir
+                </>
+              )}
+            </button>
+          </li>
           {ready && !saved && (
             <li>
               <button
@@ -335,11 +366,13 @@ function TrackMenu({ track, onClose, onAddToPlaylist, onEdit, onRemove, removeLa
               </button>
             </li>
           )}
-          <li>
-            <button className="danger" onClick={pick(() => onRemove(track))}>
-              <TrashIcon /> {removeLabel}
-            </button>
-          </li>
+          {onRemove && (
+            <li>
+              <button className="danger" onClick={pick(() => onRemove(track))}>
+                <TrashIcon /> {removeLabel}
+              </button>
+            </li>
+          )}
         </ul>
       </div>
     </div>

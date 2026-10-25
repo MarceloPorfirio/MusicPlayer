@@ -64,11 +64,25 @@ db.exec(`
   );
 `);
 
+// Histórico de reprodução: uma linha por vez que a faixa foi ouvida (30 s ou metade dela).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS plays (
+    id          INTEGER PRIMARY KEY,
+    track_id    INTEGER NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    played_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS plays_track ON plays(track_id);
+  CREATE INDEX IF NOT EXISTS plays_played_at ON plays(played_at);
+`);
+
 // Migrações de bancos criados antes da coluna existir.
 const trackCols = db.prepare('PRAGMA table_info(tracks)').all() as unknown as { name: string }[];
 if (!trackCols.some((c) => c.name === 'claimed_at')) {
   // Quando o worker pegou a faixa: se ele sumir, ela volta para a fila depois de um tempo.
   db.exec('ALTER TABLE tracks ADD COLUMN claimed_at TEXT');
+}
+if (!trackCols.some((c) => c.name === 'favorite')) {
+  db.exec('ALTER TABLE tracks ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0');
 }
 if (!trackCols.some((c) => c.name === 'normalized')) {
   // Volume normalizado (-14 LUFS)? 1 = sim, 0 = ainda não (o worker faz aos poucos), -1 = falhou.
@@ -96,6 +110,7 @@ export interface TrackRow {
   cover: string | null;
   claimed_at: string | null;
   normalized: number;
+  favorite: number;
   created_at: string;
 }
 

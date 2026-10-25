@@ -10,6 +10,7 @@ import {
   type RefObject,
 } from 'react';
 import { audioUrl, coverUrl, type Track } from './api';
+import { recordPlay } from './history';
 import { useOffline } from './offline';
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -99,6 +100,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const autoplayRef = useRef(!saved);
   const pendingSeekRef = useRef(saved?.time ?? 0);
   const lastTimeSaveRef = useRef(0);
+  /** Faixa cuja reprodução atual já entrou no histórico (conta uma vez por vez que toca). */
+  const countedRef = useRef<number | null>(null);
 
   const current = queue[index] ?? null;
   const { canPlay } = useOffline();
@@ -106,6 +109,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const restart = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    countedRef.current = null; // tocar de novo conta de novo
     audio.currentTime = 0;
     audio.play().catch((err) => console.warn('Falha ao tocar:', err));
   }, []);
@@ -259,6 +263,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !current) return;
+    countedRef.current = null;
     audio.src = audioUrl(current.id);
     if (autoplayRef.current) {
       audio.play().catch(() => setPlaying(false));
@@ -380,6 +385,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         onTimeUpdate={(e) => {
           const t = e.currentTarget.currentTime;
           setTime(t);
+          // Conta como ouvida depois de 30 s (ou da metade, em faixa curta).
+          if (current && countedRef.current !== current.id) {
+            const d = e.currentTarget.duration;
+            if (t >= (Number.isFinite(d) ? Math.min(30, d / 2) : 30)) {
+              countedRef.current = current.id;
+              recordPlay(current.id);
+            }
+          }
           if (Math.abs(t - lastTimeSaveRef.current) > 5) {
             lastTimeSaveRef.current = t;
             try {

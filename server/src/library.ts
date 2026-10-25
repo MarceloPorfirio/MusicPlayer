@@ -15,6 +15,7 @@ export function toTrack(row: TrackRow) {
     error: row.error,
     progress: progress.get(row.id) ?? null,
     hasCover: row.cover !== null,
+    favorite: Boolean(row.favorite),
     sourceUrl: row.source_url,
     createdAt: row.created_at,
   };

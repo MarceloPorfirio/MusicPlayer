@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { formatTime } from '../api';
 import { usePlayer } from '../player';
 import { Cover } from './Cover';
+import { FavoriteButton } from './FavoriteButton';
 import { NowPlaying } from './NowPlaying';
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from './icons';
 
@@ -40,6 +41,7 @@ export function PlayerBar() {
             </span>
           </button>
           <div className="player-controls">
+            <FavoriteButton track={current} />
             <button className="icon-btn" onClick={prev} aria-label="Anterior">
               <PrevIcon />
             </button>

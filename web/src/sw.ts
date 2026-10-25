@@ -40,6 +40,6 @@ registerRoute(
 registerRoute(
   ({ url, request }) =>
     request.method === 'GET' &&
-    /^\/api\/(session|tracks|playlists(\/\d+)?)$/.test(url.pathname),
+    /^\/api\/(session|tracks|playlists(\/\d+)?|smart(\/\w+)?)$/.test(url.pathname),
   new NetworkFirst({ cacheName: API_CACHE, networkTimeoutSeconds: 3 }),
 );
