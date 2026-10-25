@@ -4,6 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { MEDIA_DIR } from '../config.js';
 import { db, type ImportRow, type TrackRow } from '../db.js';
 import { enqueue } from '../downloads.js';
+import { notifyWorker } from '../jobs.js';
 import { getTrack, importInfo, queueImport, toTrack, usesWorker } from '../library.js';
 import { fetchInfo } from '../ytdlp.js';
 
@@ -45,7 +46,9 @@ export async function trackRoutes(app: FastifyInstance) {
     const { changes } = db
       .prepare("UPDATE imports SET status = 'pending', error = NULL, claimed_at = NULL WHERE id = ?")
       .run(Number(req.params.id));
-    return changes ? reply.code(204).send() : reply.code(404).send({ error: 'Importação não encontrada.' });
+    if (!changes) return reply.code(404).send({ error: 'Importação não encontrada.' });
+    notifyWorker();
+    return reply.code(204).send();
   });
 
   app.delete<IdParams>('/api/imports/:id', async (req, reply) => {
@@ -93,7 +96,9 @@ export async function trackRoutes(app: FastifyInstance) {
   app.get<IdParams>('/api/tracks/:id/audio', async (req, reply) => {
     const track = getTrack(Number(req.params.id));
     if (!track?.file) return reply.code(404).send({ error: 'Áudio indisponível.' });
-    return reply.sendFile(track.file, MEDIA_DIR, { maxAge: '365d', immutable: true });
+    // Sem cache "imutável": o arquivo pode ser trocado no mesmo endereço (normalização de
+    // volume). O navegador revalida pelo ETag e recebe 304 enquanto não mudar.
+    return reply.sendFile(track.file, MEDIA_DIR, { maxAge: 0 });
   });
 
   app.get<IdParams>('/api/tracks/:id/cover', async (req, reply) => {

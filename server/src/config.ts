@@ -32,6 +32,7 @@ export const DB_PATH = path.join(DATA_DIR, 'library.db');
 export const WEB_DIST = path.join(root, 'web', 'dist');
 export const YTDLP_BIN = process.env.YTDLP_BIN ?? findWinget('yt-dlp.yt-dlp_', 'yt-dlp.exe') ?? 'yt-dlp';
 export const FFMPEG_DIR = process.env.FFMPEG_DIR ?? findWinget('yt-dlp.FFmpeg_', 'ffmpeg.exe', true);
+export const FFMPEG_BIN = FFMPEG_DIR ? path.join(FFMPEG_DIR, 'ffmpeg') : 'ffmpeg';
 export const DOWNLOAD_CONCURRENCY = Number(process.env.DOWNLOAD_CONCURRENCY ?? 2);
 /**
  * "local": o próprio servidor baixa com o yt-dlp (padrão, bom para rodar em casa).

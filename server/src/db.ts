@@ -58,6 +58,10 @@ if (!trackCols.some((c) => c.name === 'claimed_at')) {
   // Quando o worker pegou a faixa: se ele sumir, ela volta para a fila depois de um tempo.
   db.exec('ALTER TABLE tracks ADD COLUMN claimed_at TEXT');
 }
+if (!trackCols.some((c) => c.name === 'normalized')) {
+  // Volume normalizado (-14 LUFS)? 1 = sim, 0 = ainda não (o worker faz aos poucos), -1 = falhou.
+  db.exec('ALTER TABLE tracks ADD COLUMN normalized INTEGER NOT NULL DEFAULT 0');
+}
 const playlistCols = db.prepare('PRAGMA table_info(playlists)').all() as unknown as { name: string }[];
 if (!playlistCols.some((c) => c.name === 'source_id')) {
   db.exec('ALTER TABLE playlists ADD COLUMN source_id TEXT');
@@ -79,6 +83,7 @@ export interface TrackRow {
   file: string | null;
   cover: string | null;
   claimed_at: string | null;
+  normalized: number;
   created_at: string;
 }
 

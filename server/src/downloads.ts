@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { DOWNLOAD_CONCURRENCY, DOWNLOAD_MODE, MEDIA_DIR } from './config.js';
 import { db, type TrackRow } from './db.js';
+import { notifyWorker } from './jobs.js';
 import { downloadAudio } from './ytdlp.js';
 
 /** Progresso em memória (0-100) dos downloads em andamento, por id da faixa. */
@@ -16,6 +17,7 @@ export function enqueue(trackId: number) {
     db.prepare("UPDATE tracks SET status = 'pending', error = NULL WHERE id = ? AND status = 'error'").run(
       trackId,
     );
+    notifyWorker();
     return;
   }
   if (queue.includes(trackId) || progress.has(trackId)) return;
@@ -45,7 +47,7 @@ async function download(id: number) {
       progress.set(id, p),
     );
     const hasCover = existsSync(path.join(MEDIA_DIR, cover));
-    db.prepare("UPDATE tracks SET status = 'ready', file = ?, cover = ? WHERE id = ?").run(
+    db.prepare("UPDATE tracks SET status = 'ready', normalized = 1, file = ?, cover = ? WHERE id = ?").run(
       file,
       hasCover ? cover : null,
       id,

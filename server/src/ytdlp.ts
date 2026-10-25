@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 import { FFMPEG_DIR, MEDIA_DIR, YTDLP_ARGS, YTDLP_BIN } from './config.js';
+import { normalizeLoudness } from './loudness.js';
 
 export interface MediaInfo {
   _type?: string;
@@ -141,6 +143,7 @@ export async function downloadAudio(
       if (match) onProgress(Number(match[1]));
     },
   );
+  await normalizeLoudness(path.join(outDir, `${basename}.m4a`));
   return { file: `${basename}.m4a`, cover: `${basename}.jpg` };
 }
 

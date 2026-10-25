@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { DOWNLOAD_MODE, MEDIA_DIR, WORKER_TOKEN } from '../config.js';
 import { db, type ImportRow, type TrackRow } from '../db.js';
 import { progress } from '../downloads.js';
+import { waitForJob } from '../jobs.js';
 import { getTrack, importInfo } from '../library.js';
 import { trimInfo, type MediaInfo } from '../ytdlp.js';
 
@@ -54,8 +55,15 @@ export async function workerRoutes(app: FastifyInstance) {
       (_req, body, done) => done(null, body),
     );
 
-    /** Próxima tarefa: primeiro URLs a buscar, depois faixas a baixar. 204 = nada a fazer. */
-    w.post('/api/worker/claim', async (_req, reply) => {
+    /**
+     * Próxima tarefa, por prioridade: URLs a buscar, faixas a baixar e, com a fila vazia,
+     * faixas antigas a normalizar. Sem nada, segura a resposta até 25 s (long-polling) e
+     * responde assim que surgir trabalho. 204 = nada a fazer.
+     * O worker informa o que sabe fazer em `capabilities` (worker antigo não manda nada).
+     */
+    w.post<{ Body: { capabilities?: string[] } }>('/api/worker/claim', async (req, reply) => {
+      const capabilities = new Set(req.body?.capabilities ?? []);
+
       // Um worker por vez, e ele faz uma tarefa de cada vez: se está pedindo outra, não tem
       // nenhuma em mãos. O que ficou "em andamento" (upload que falhou, PC desligado no meio,
       // worker reiniciado) volta para a fila na hora, em vez de esperar um tempo limite.
@@ -63,29 +71,35 @@ export async function workerRoutes(app: FastifyInstance) {
       db.exec("UPDATE tracks SET status = 'pending', claimed_at = NULL WHERE status = 'downloading'");
       progress.clear();
 
-      const imp = db
-        .prepare("SELECT * FROM imports WHERE status = 'pending' ORDER BY id LIMIT 1")
-        .get() as ImportRow | undefined;
-      if (imp) {
-        db.prepare("UPDATE imports SET status = 'processing', claimed_at = datetime('now') WHERE id = ?").run(
-          imp.id,
-        );
-        return { type: 'import', id: imp.id, url: imp.url };
+      let job = nextJob(capabilities);
+      if (!job) {
+        // Para de esperar se o worker desconectar. É o 'close' da resposta: o da requisição
+        // dispara assim que o corpo termina de ser lido, não quando a conexão cai.
+        const abort = new AbortController();
+        reply.raw.once('close', () => abort.abort());
+        await waitForJob(25_000, abort.signal);
+        lastSeen = Date.now();
+        job = nextJob(capabilities);
       }
-
-      const track = db
-        .prepare("SELECT * FROM tracks WHERE status = 'pending' ORDER BY id LIMIT 1")
-        .get() as TrackRow | undefined;
-      if (track) {
-        db.prepare(
-          "UPDATE tracks SET status = 'downloading', error = NULL, claimed_at = datetime('now') WHERE id = ?",
-        ).run(track.id);
-        progress.set(track.id, 0);
-        return { type: 'track', id: track.id, url: track.source_url };
-      }
-
-      return reply.code(204).send();
+      return job ?? reply.code(204).send();
     });
+
+    /** Arquivo atual da faixa, para o worker normalizar faixas antigas. */
+    w.get<IdParams>('/api/worker/tracks/:id/source', async (req, reply) => {
+      const track = getTrack(Number(req.params.id));
+      if (!track?.file) return reply.code(404).send({ error: 'Faixa sem áudio.' });
+      return reply.sendFile(track.file, MEDIA_DIR, { maxAge: 0 });
+    });
+
+    w.post<IdParams & { Body: { message?: string } }>(
+      '/api/worker/tracks/:id/normalize-error',
+      async (req, reply) => {
+        // -1: não oferece de novo (senão a mesma faixa voltaria para o worker para sempre).
+        db.prepare('UPDATE tracks SET normalized = -1 WHERE id = ?').run(Number(req.params.id));
+        req.log.warn({ track: req.params.id, message: req.body?.message }, 'falha ao normalizar');
+        return reply.code(204).send();
+      },
+    );
 
     w.post<IdParams & { Body: { info?: MediaInfo } }>(
       '/api/worker/imports/:id/result',
@@ -134,9 +148,11 @@ export async function workerRoutes(app: FastifyInstance) {
       if (!req.body?.length) return reply.code(400).send({ error: 'Áudio vazio.' });
       const name = `track-${track.id}.m4a`;
       await writeAtomic(name, req.body);
+      // Worker antigo não normaliza nem manda o cabeçalho: a faixa fica para normalizar depois.
+      const normalized = req.headers['x-normalized'] === '1' ? 1 : 0;
       db.prepare(
-        "UPDATE tracks SET status = 'ready', file = ?, error = NULL, claimed_at = NULL WHERE id = ?",
-      ).run(name, track.id);
+        "UPDATE tracks SET status = 'ready', file = ?, normalized = ?, error = NULL, claimed_at = NULL WHERE id = ?",
+      ).run(name, normalized, track.id);
       progress.delete(track.id);
       return reply.code(204).send();
     });
@@ -151,6 +167,41 @@ export async function workerRoutes(app: FastifyInstance) {
       return reply.code(204).send();
     });
   });
+}
+
+type Job =
+  | { type: 'import'; id: number; url: string }
+  | { type: 'track'; id: number; url: string }
+  | { type: 'normalize'; id: number };
+
+function nextJob(capabilities: Set<string>): Job | null {
+  const imp = db
+    .prepare("SELECT * FROM imports WHERE status = 'pending' ORDER BY id LIMIT 1")
+    .get() as ImportRow | undefined;
+  if (imp) {
+    db.prepare("UPDATE imports SET status = 'processing', claimed_at = datetime('now') WHERE id = ?").run(imp.id);
+    return { type: 'import', id: imp.id, url: imp.url };
+  }
+
+  const track = db
+    .prepare("SELECT * FROM tracks WHERE status = 'pending' ORDER BY id LIMIT 1")
+    .get() as TrackRow | undefined;
+  if (track) {
+    db.prepare(
+      "UPDATE tracks SET status = 'downloading', error = NULL, claimed_at = datetime('now') WHERE id = ?",
+    ).run(track.id);
+    progress.set(track.id, 0);
+    return { type: 'track', id: track.id, url: track.source_url };
+  }
+
+  // Faixa pronta continua tocável enquanto é normalizada: o arquivo é trocado no fim.
+  if (capabilities.has('normalize')) {
+    const old = db
+      .prepare("SELECT id FROM tracks WHERE status = 'ready' AND file IS NOT NULL AND normalized = 0 ORDER BY id LIMIT 1")
+      .get() as { id: number } | undefined;
+    if (old) return { type: 'normalize', id: old.id };
+  }
+  return null;
 }
 
 /** Grava num temporário e renomeia: quem estiver tocando nunca lê um arquivo pela metade. */

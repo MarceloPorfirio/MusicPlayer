@@ -1,6 +1,7 @@
 import { DOWNLOAD_MODE } from './config.js';
 import { db, type PlaylistRow, type TrackRow } from './db.js';
 import { enqueue, progress } from './downloads.js';
+import { notifyWorker } from './jobs.js';
 import { describe, entryToInfo, type MediaInfo } from './ytdlp.js';
 
 export function toTrack(row: TrackRow) {
@@ -114,6 +115,7 @@ export function importInfo(info: MediaInfo): ImportResult {
 /** Modo worker: guarda a URL para o worker buscar. */
 export function queueImport(url: string): ImportResult {
   const { lastInsertRowid } = db.prepare('INSERT INTO imports (url) VALUES (?)').run(url);
+  notifyWorker();
   return { kind: 'queued', importId: Number(lastInsertRowid) };
 }
 
