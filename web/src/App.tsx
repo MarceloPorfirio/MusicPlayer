@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api, type PlaylistSummary, type Track } from './api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { api, type ImportJob, type PlaylistSummary, type ServerStatus, type Track } from './api';
 import { AddToPlaylistDialog } from './components/AddToPlaylistDialog';
 import { AddTrackForm } from './components/AddTrackForm';
+import { ImportList, WorkerStatus } from './components/WorkerStatus';
+import { StatusContext } from './status';
 import { PlayerBar } from './components/PlayerBar';
 import { PlaylistView } from './components/PlaylistView';
 import { PlaylistsView } from './components/PlaylistsView';
@@ -21,129 +23,159 @@ export function App({ onLogout }: { onLogout?: () => void }) {
   const { playTracks, forget } = usePlayer();
   const offline = useOffline();
 
-  const loadTracks = useCallback(() => api.tracks().then(setTracks), []);
+  const [status, setStatus] = useState<ServerStatus | null>(null);
+  const [imports, setImports] = useState<ImportJob[]>([]);
+  const importsCount = useRef(0);
+
   const loadPlaylists = useCallback(() => api.playlists().then(setPlaylists), []);
+  /** Biblioteca + URLs aguardando o PC + status do worker. */
+  const loadTracks = useCallback(async () => {
+    const [t, i, s] = await Promise.all([
+      api.tracks(),
+      api.imports().catch(() => []),
+      api.status().catch(() => null),
+    ]);
+    setTracks(t);
+    setImports(i);
+    setStatus(s);
+    // Uma URL processada pelo PC pode ter virado playlist nova.
+    if (i.length < importsCount.current) void loadPlaylists();
+    importsCount.current = i.length;
+  }, [loadPlaylists]);
 
   useEffect(() => {
     void loadTracks();
     void loadPlaylists();
   }, [loadTracks, loadPlaylists]);
 
-  // Enquanto houver downloads em andamento, atualiza a lista periodicamente.
-  const busy = tracks.some((t) => t.status === 'pending' || t.status === 'downloading');
+  // Enquanto houver downloads ou URLs em andamento, atualiza a lista periodicamente.
+  // Com o PC desconectado não há progresso a mostrar: só confere de vez em quando.
+  const busy =
+    tracks.some((t) => t.status === 'pending' || t.status === 'downloading') ||
+    imports.some((i) => i.status !== 'error');
+  const waitingForPc = status?.downloadMode === 'worker' && !status.worker.online;
   useEffect(() => {
     if (!busy) return;
-    const timer = setInterval(loadTracks, 1500);
+    const timer = setInterval(loadTracks, waitingForPc ? 10_000 : 1500);
     return () => clearInterval(timer);
-  }, [busy, loadTracks]);
+  }, [busy, waitingForPc, loadTracks]);
 
   const q = query.trim().toLowerCase();
   const visibleTracks = q
-    ? tracks.filter((t) => `${t.title} ${t.artist ?? ''} ${t.album ?? ''}`.toLowerCase().includes(q))
+    ? tracks.filter((t) =>
+        `${t.title} ${t.artist ?? ''} ${t.album ?? ''}`.toLowerCase().includes(q),
+      )
     : tracks;
 
   return (
-    <div className="app">
-      <header className="top-bar">
-        <h1>MusicPlayer</h1>
-        <nav className="tabs">
-          <button
-            className={view.kind === 'library' ? 'active' : undefined}
-            onClick={() => setView({ kind: 'library' })}
-          >
-            Biblioteca
-          </button>
-          <button
-            className={view.kind !== 'library' ? 'active' : undefined}
-            onClick={() => setView({ kind: 'playlists' })}
-          >
-            Playlists
-          </button>
-          {onLogout && <button onClick={onLogout}>Sair</button>}
-        </nav>
-      </header>
+    <StatusContext.Provider value={status}>
+      <div className="app">
+        <header className="top-bar">
+          <h1>MusicPlayer</h1>
+          <nav className="tabs">
+            <button
+              className={view.kind === 'library' ? 'active' : undefined}
+              onClick={() => setView({ kind: 'library' })}
+            >
+              Biblioteca
+            </button>
+            <button
+              className={view.kind !== 'library' ? 'active' : undefined}
+              onClick={() => setView({ kind: 'playlists' })}
+            >
+              Playlists
+            </button>
+            {onLogout && <button onClick={onLogout}>Sair</button>}
+          </nav>
+        </header>
 
-      {!offline.online && (
-        <div className="offline-banner">Sem conexão: tocando só as músicas baixadas no aparelho.</div>
-      )}
+        {!offline.online && (
+          <div className="offline-banner">
+            Sem conexão: tocando só as músicas baixadas no aparelho.
+          </div>
+        )}
 
-      <main className="content">
-        {view.kind === 'library' && (
-          <>
-            <AddTrackForm onAdded={() => void Promise.all([loadTracks(), loadPlaylists()])} />
-            {tracks.length > 5 && (
-              <input
-                className="search"
-                type="search"
-                placeholder="Buscar na biblioteca…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
+        <main className="content">
+          {view.kind === 'library' && (
+            <>
+              <AddTrackForm onAdded={() => void Promise.all([loadTracks(), loadPlaylists()])} />
+              <WorkerStatus status={status} />
+              <ImportList imports={imports} onChanged={loadTracks} />
+              {tracks.length > 5 && (
+                <input
+                  className="search"
+                  type="search"
+                  placeholder="Buscar na biblioteca…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              )}
+              {visibleTracks.some(offline.canPlay) && (
+                <div className="list-actions">
+                  <button className="btn primary" onClick={() => playTracks(visibleTracks)}>
+                    <PlayIcon width={18} height={18} /> Tocar tudo
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => playTracks(visibleTracks, undefined, true)}
+                  >
+                    <ShuffleIcon width={18} height={18} /> Aleatório
+                  </button>
+                </div>
+              )}
+              <TrackList
+                tracks={visibleTracks}
+                onAddToPlaylist={setAddingTrack}
+                onEdited={() => void Promise.all([loadTracks(), loadPlaylists()])}
+                onRetry={async (t) => {
+                  await api.retryTrack(t.id);
+                  await loadTracks();
+                }}
+                removeLabel="Apagar da biblioteca"
+                onRemove={async (t) => {
+                  if (!confirm(`Apagar "${t.title}" da biblioteca e de todas as playlists?`))
+                    return;
+                  try {
+                    await api.deleteTrack(t.id);
+                    forget(t.id);
+                    await offline.remove([t]);
+                  } catch (err) {
+                    alert((err as Error).message);
+                  }
+                  await Promise.all([loadTracks(), loadPlaylists()]);
+                }}
               />
-            )}
-            {visibleTracks.some(offline.canPlay) && (
-              <div className="list-actions">
-                <button className="btn primary" onClick={() => playTracks(visibleTracks)}>
-                  <PlayIcon width={18} height={18} /> Tocar tudo
-                </button>
-                <button
-                  className="btn"
-                  onClick={() => playTracks(visibleTracks, undefined, true)}
-                >
-                  <ShuffleIcon width={18} height={18} /> Aleatório
-                </button>
-              </div>
-            )}
-            <TrackList
-              tracks={visibleTracks}
-              onAddToPlaylist={setAddingTrack}
-              onEdited={() => void Promise.all([loadTracks(), loadPlaylists()])}
-              onRetry={async (t) => {
-                await api.retryTrack(t.id);
-                await loadTracks();
-              }}
-              removeLabel="Apagar da biblioteca"
-              onRemove={async (t) => {
-                if (!confirm(`Apagar "${t.title}" da biblioteca e de todas as playlists?`)) return;
-                try {
-                  await api.deleteTrack(t.id);
-                  forget(t.id);
-                  await offline.remove([t]);
-                } catch (err) {
-                  alert((err as Error).message);
-                }
-                await Promise.all([loadTracks(), loadPlaylists()]);
-              }}
+            </>
+          )}
+
+          {view.kind === 'playlists' && (
+            <PlaylistsView
+              playlists={playlists}
+              onOpen={(id) => setView({ kind: 'playlist', id })}
+              onChanged={loadPlaylists}
             />
-          </>
-        )}
+          )}
 
-        {view.kind === 'playlists' && (
-          <PlaylistsView
+          {view.kind === 'playlist' && (
+            <PlaylistView
+              id={view.id}
+              onBack={() => setView({ kind: 'playlists' })}
+              onChanged={loadPlaylists}
+            />
+          )}
+        </main>
+
+        <PlayerBar />
+
+        {addingTrack && (
+          <AddToPlaylistDialog
+            track={addingTrack}
             playlists={playlists}
-            onOpen={(id) => setView({ kind: 'playlist', id })}
+            onClose={() => setAddingTrack(null)}
             onChanged={loadPlaylists}
           />
         )}
-
-        {view.kind === 'playlist' && (
-          <PlaylistView
-            id={view.id}
-            onBack={() => setView({ kind: 'playlists' })}
-            onChanged={loadPlaylists}
-          />
-        )}
-      </main>
-
-      <PlayerBar />
-
-      {addingTrack && (
-        <AddToPlaylistDialog
-          track={addingTrack}
-          playlists={playlists}
-          onClose={() => setAddingTrack(null)}
-          onChanged={loadPlaylists}
-        />
-      )}
-    </div>
+      </div>
+    </StatusContext.Provider>
   );
 }

@@ -27,7 +27,23 @@ export interface Playlist {
   tracks: Track[];
 }
 
+/** URL aguardando o worker (servidor com DOWNLOAD_MODE=worker). */
+export interface ImportJob {
+  id: number;
+  url: string;
+  status: 'pending' | 'processing' | 'error';
+  error: string | null;
+  createdAt: string;
+}
+
+export interface ServerStatus {
+  downloadMode: 'local' | 'worker';
+  worker: { online: boolean; lastSeen: string | null };
+  waiting: { tracks: number; imports: number };
+}
+
 export type ImportResult =
+  | { kind: 'queued'; importId: number }
   | { kind: 'track'; track: Track }
   | {
       kind: 'playlist';
@@ -64,6 +80,10 @@ export const api = {
 
   tracks: () => request<Track[]>('GET', '/api/tracks'),
   importUrl: (url: string) => request<ImportResult>('POST', '/api/import', { url }),
+  imports: () => request<ImportJob[]>('GET', '/api/imports'),
+  retryImport: (id: number) => request<void>('POST', `/api/imports/${id}/retry`),
+  deleteImport: (id: number) => request<void>('DELETE', `/api/imports/${id}`),
+  status: () => request<ServerStatus>('GET', '/api/status'),
   updateTrack: (id: number, data: Pick<Track, 'title' | 'artist' | 'album'>) =>
     request<Track>('PATCH', `/api/tracks/${id}`, data),
   trackPlaylists: (id: number) => request<number[]>('GET', `/api/tracks/${id}/playlists`),

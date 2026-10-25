@@ -69,6 +69,38 @@ export async function fetchInfo(url: string): Promise<MediaInfo> {
   return JSON.parse(json) as MediaInfo;
 }
 
+/**
+ * Só os campos que o servidor usa. O JSON completo de um vídeo tem centenas de KB
+ * (lista de formatos etc.), e o worker o envia pela internet.
+ */
+export function trimInfo(info: MediaInfo): MediaInfo {
+  const { _type, id, extractor_key, webpage_url, title, track, artist, creator, album, uploader, channel, duration } =
+    info;
+  return {
+    _type,
+    id,
+    extractor_key,
+    webpage_url,
+    title,
+    track,
+    artist,
+    creator,
+    album,
+    uploader,
+    channel,
+    duration,
+    entries: info.entries?.map(({ id, ie_key, url, title, channel, uploader, duration }) => ({
+      id,
+      ie_key,
+      url,
+      title,
+      channel,
+      uploader,
+      duration,
+    })),
+  };
+}
+
 /** Converte um item de playlist no formato de vídeo; null se privado/removido. */
 export function entryToInfo(entry: PlaylistEntry): MediaInfo | null {
   if (!entry.id || !entry.title || /^\[(private|deleted) video\]$/i.test(entry.title)) return null;
@@ -83,11 +115,12 @@ export function entryToInfo(entry: PlaylistEntry): MediaInfo | null {
   };
 }
 
-/** Baixa só o áudio como .m4a + capa .jpg em MEDIA_DIR/<basename>.* */
+/** Baixa só o áudio como .m4a + capa .jpg em <outDir>/<basename>.* */
 export async function downloadAudio(
   url: string,
   basename: string,
   onProgress: (percent: number) => void,
+  outDir = MEDIA_DIR,
 ): Promise<{ file: string; cover: string }> {
   await run(
     [
@@ -99,7 +132,7 @@ export async function downloadAudio(
       '--write-thumbnail', '--convert-thumbnails', 'jpg',
       '--newline',
       '--progress-template', 'download:%(progress._percent_str)s',
-      '-P', MEDIA_DIR,
+      '-P', outDir,
       '-o', `${basename}.%(ext)s`,
       url,
     ],

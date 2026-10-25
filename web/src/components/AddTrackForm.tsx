@@ -3,6 +3,7 @@ import { api, type ImportResult } from '../api';
 import { useOffline } from '../offline';
 
 function describeResult(result: ImportResult) {
+  if (result.kind === 'queued') return 'Na fila: o seu PC vai buscar esta URL e baixar as músicas.';
   if (result.kind === 'track') return null;
   const parts = [`${result.added} nova${result.added === 1 ? '' : 's'}`];
   if (result.existing) parts.push(`${result.existing} já na biblioteca`);

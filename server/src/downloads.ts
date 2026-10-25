@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { DOWNLOAD_CONCURRENCY, MEDIA_DIR } from './config.js';
+import { DOWNLOAD_CONCURRENCY, DOWNLOAD_MODE, MEDIA_DIR } from './config.js';
 import { db, type TrackRow } from './db.js';
 import { downloadAudio } from './ytdlp.js';
 
@@ -11,6 +11,13 @@ const queue: number[] = [];
 let active = 0;
 
 export function enqueue(trackId: number) {
+  if (DOWNLOAD_MODE === 'worker') {
+    // Quem baixa é o worker: basta a faixa estar pendente (faixas com erro voltam para a fila).
+    db.prepare("UPDATE tracks SET status = 'pending', error = NULL WHERE id = ? AND status = 'error'").run(
+      trackId,
+    );
+    return;
+  }
   if (queue.includes(trackId) || progress.has(trackId)) return;
   queue.push(trackId);
   pump();
@@ -55,6 +62,7 @@ async function download(id: number) {
 
 /** Retoma downloads interrompidos quando o servidor reinicia. */
 export function resumePending() {
+  if (DOWNLOAD_MODE === 'worker') return; // o worker retoma pela própria fila
   const rows = db
     .prepare("SELECT id FROM tracks WHERE status IN ('pending', 'downloading') ORDER BY id")
     .all() as unknown as { id: number }[];

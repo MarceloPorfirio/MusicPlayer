@@ -21,6 +21,7 @@ import { useState, type ReactNode } from 'react';
 import { formatTime, type Track } from '../api';
 import { useOffline } from '../offline';
 import { usePlayer } from '../player';
+import { pendingLabel, useServerStatus } from '../status';
 import { Cover } from './Cover';
 import { EditTrackDialog } from './EditTrackDialog';
 import { Equalizer } from './Visualizer';
@@ -182,6 +183,9 @@ function SortableRow({ track, rowClass, ...rest }: RowProps) {
 
 function RowBody({ track: t, tracks, onRetry, onMenu }: RowProps) {
   const { current, playing, playTracks, toggle } = usePlayer();
+  const status = useServerStatus();
+  // PC desconectado no meio de um download: a faixa volta à fila quando ele reconectar.
+  const stalled = t.status === 'downloading' && status?.downloadMode === 'worker' && !status.worker.online;
   const offline = useOffline();
   const playable = offline.canPlay(t);
   const isCurrent = current?.id === t.id;
@@ -189,10 +193,10 @@ function RowBody({ track: t, tracks, onRetry, onMenu }: RowProps) {
   let subtitle: ReactNode;
   switch (t.status) {
     case 'pending':
-      subtitle = 'Na fila…';
+      subtitle = pendingLabel(status);
       break;
     case 'downloading':
-      subtitle = `Baixando ${Math.round(t.progress ?? 0)}%`;
+      subtitle = stalled ? pendingLabel(status) : `Baixando ${Math.round(t.progress ?? 0)}%`;
       break;
     case 'error':
       subtitle = <span className="error">Falhou: {t.error}</span>;
@@ -236,7 +240,7 @@ function RowBody({ track: t, tracks, onRetry, onMenu }: RowProps) {
         </span>
         <span className="track-duration">{formatTime(t.duration)}</span>
       </button>
-      {t.status === 'downloading' && (
+      {t.status === 'downloading' && !stalled && (
         <progress className="track-progress" max={100} value={t.progress ?? 0} />
       )}
       <div className="track-actions">

@@ -7,6 +7,8 @@ PWA pessoal de músicas: cole a URL de um vídeo do YouTube (ou de outro site su
 ```
 server/   API Fastify + SQLite (node:sqlite) + fila de downloads com yt-dlp
 web/      PWA React + Vite (vite-plugin-pwa)
+worker/   worker de downloads para rodar num PC em casa quando o servidor está numa VPS
+scripts/  inicialização automática do worker no Windows
 data/     criado na 1ª execução: library.db e media/ (áudios e capas) — fora do git
 ```
 
@@ -44,6 +46,8 @@ Ou com a imagem Docker de produção: `docker compose up --build` (também em `h
 | Variável               | Padrão    | Descrição                                                  |
 | ---------------------- | --------- | ---------------------------------------------------------- |
 | `APP_PASSWORD`         | —         | Senha de acesso. Sem ela o login fica desligado            |
+| `DOWNLOAD_MODE`        | `local`   | `worker`: o servidor não acessa o YouTube (ver abaixo)     |
+| `WORKER_TOKEN`         | —         | Token do worker; sem ele as rotas `/api/worker/*` ficam fechadas |
 | `SESSION_SECRET`       | derivado  | Chave que assina o cookie de sessão                        |
 | `TRUST_PROXY`          | `false`   | `true` atrás de proxy reverso (já vem `true` na imagem)    |
 | `PORT`                 | `3000`    | Porta da API                                               |
@@ -83,23 +87,36 @@ Depois, abra o domínio no celular, faça login e use **Adicionar à tela inicia
 - **Atualizar o yt-dlp:** reinicie o container, porque ele se atualiza a cada start.
 - **Backup:** o volume de `/app/data`. O `library.db` é pequeno e é o que importa, porque as músicas podem ser baixadas de novo. O backup do Coolify cobre só bancos gerenciados por ele, não este SQLite.
 
-### Se o YouTube bloquear o IP da VPS
+### Downloads pelo worker (IP de casa)
 
-Se os downloads falharem com *"Sign in to confirm you're not a bot"*:
+O YouTube bloqueia IP de datacenter (*"Sign in to confirm you're not a bot"*). Por isso, na VPS, o servidor roda com `DOWNLOAD_MODE=worker` e **nunca acessa o YouTube**. Ao colar uma URL, ela entra numa fila, e um worker no seu PC, com IP residencial, busca as informações, baixa as músicas e envia áudio e capa para a VPS. Ouvir não depende do PC: só baixar músicas novas.
 
-1. Exporte os cookies de uma conta **secundária** do YouTube (formato Netscape, com uma extensão como "Get cookies.txt LOCALLY").
-2. Coloque o arquivo em `cookies.txt` dentro do volume de `/app/data`.
-3. Troque o `YTDLP_ARGS` no Coolify pela versão com `--cookies` do `.env.example`.
-4. Reinicie o container.
+```
+celular/PC ──URL──▶ VPS (fila) ◀──pede tarefa── worker no PC ──yt-dlp──▶ YouTube
+                    VPS ◀──────── áudio + capa ── worker
+```
 
-Não use a sua conta principal: contas usadas por automação a partir de datacenter podem ser bloqueadas.
+**Configuração:**
+
+1. Gere um token: `openssl rand -hex 32`
+2. **No Coolify:** adicione `DOWNLOAD_MODE=worker` e `WORKER_TOKEN=<token>` e faça o redeploy.
+3. **No PC:** copie `worker.env.example` para `worker.env` e preencha `SERVER_URL` e o mesmo `WORKER_TOKEN`. O PC precisa de `yt-dlp` e `ffmpeg` (ver Requisitos).
+4. Teste com `npm run worker`.
+5. Para iniciar escondido com o Windows: `powershell -ExecutionPolicy Bypass -File scripts\worker-autostart.ps1`. O log fica em `worker.log`. Para desfazer, rode o mesmo comando com `-Remove`.
+
+**Detalhes:**
+
+- **Um worker por vez.** A cada pedido de tarefa, o servidor devolve para a fila o que tinha ficado "em andamento" (PC desligado no meio, upload que falhou). Dois workers simultâneos tomariam a tarefa um do outro.
+- **No app:** um aviso mostra se o PC está conectado e quantas músicas e URLs estão aguardando.
 
 ## API
 
 | Método | Rota                                  | Descrição                           |
 | ------ | ------------------------------------- | ----------------------------------- |
 | GET    | `/api/tracks`                         | Lista a biblioteca                  |
-| POST   | `/api/import` `{ url }`               | Vídeo → faixa; playlist → playlist com todas as faixas (reimportar sincroniza) |
+| GET    | `/api/status`                         | Modo de download, worker conectado, itens aguardando |
+| GET    | `/api/imports`                        | URLs aguardando o worker (modo worker) |
+| POST   | `/api/import` `{ url }`               | Vídeo → faixa; playlist → playlist com todas as faixas (reimportar sincroniza). No modo worker, só enfileira (202) |
 | PATCH  | `/api/tracks/:id`                     | Edita título/artista/álbum          |
 | POST   | `/api/tracks/:id/retry`               | Tenta baixar de novo                |
 | DELETE | `/api/tracks/:id`                     | Remove faixa e arquivos             |

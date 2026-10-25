@@ -34,7 +34,8 @@ export async function setupAuth(app: FastifyInstance) {
 
   app.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?')[0];
-    if (!path.startsWith('/api/') || PUBLIC_ROUTES.has(path)) return;
+    // /api/worker/* usa o próprio token (ver routes/worker.ts), não a sessão.
+    if (!path.startsWith('/api/') || PUBLIC_ROUTES.has(path) || path.startsWith('/api/worker/')) return;
     if (!isAuthenticated(req)) return reply.code(401).send({ error: 'Faça login.' });
   });
 

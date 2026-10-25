@@ -480,6 +480,37 @@ li.active .cover-overlay { opacity: 1; }
   color: var(--accent);
 }
 
+.worker-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.worker-status .dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e0a030;
+}
+.worker-status.online .dot { background: var(--accent); }
+
+.import-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.import-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 6px;
+}
+
 .storage-card {
   display: flex;
   align-items: center;

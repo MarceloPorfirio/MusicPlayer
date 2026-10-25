@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { db, type PlaylistRow, type TrackRow } from '../db.js';
-import { toTrack } from './tracks.js';
+import { toTrack } from '../library.js';
 
 type IdParams = { Params: { id: string } };
 

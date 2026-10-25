@@ -33,6 +33,16 @@ export const WEB_DIST = path.join(root, 'web', 'dist');
 export const YTDLP_BIN = process.env.YTDLP_BIN ?? findWinget('yt-dlp.yt-dlp_', 'yt-dlp.exe') ?? 'yt-dlp';
 export const FFMPEG_DIR = process.env.FFMPEG_DIR ?? findWinget('yt-dlp.FFmpeg_', 'ffmpeg.exe', true);
 export const DOWNLOAD_CONCURRENCY = Number(process.env.DOWNLOAD_CONCURRENCY ?? 2);
+/**
+ * "local": o próprio servidor baixa com o yt-dlp (padrão, bom para rodar em casa).
+ * "worker": o servidor nunca acessa o YouTube; só enfileira, e um worker num IP
+ * residencial (npm run worker) busca, baixa e envia os arquivos. Necessário em VPS,
+ * cujo IP de datacenter o YouTube bloqueia.
+ */
+export const DOWNLOAD_MODE: 'local' | 'worker' =
+  process.env.DOWNLOAD_MODE === 'worker' ? 'worker' : 'local';
+/** Token que o worker manda em Authorization: Bearer. Sem ele as rotas do worker ficam fechadas. */
+export const WORKER_TOKEN = process.env.WORKER_TOKEN || undefined;
 /** Opções extras para todas as chamadas do yt-dlp, ex.: "--sleep-requests 1 --cookies /app/data/cookies.txt". */
 export const YTDLP_ARGS = process.env.YTDLP_ARGS?.trim().split(/\s+/).filter(Boolean) ?? [];
 

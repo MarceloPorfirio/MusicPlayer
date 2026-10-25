@@ -15,6 +15,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY server/package.json server/
 COPY web/package.json web/
+COPY worker/package.json worker/
 RUN npm ci
 
 COPY . .

@@ -3,12 +3,15 @@
   "private": true,
   "workspaces": [
     "server",
-    "web"
+    "web",
+    "worker"
   ],
   "scripts": {
     "dev": "concurrently -n server,web -c blue,magenta \"npm run dev -w server\" \"npm run dev -w web\"",
     "build": "npm run build -w web",
-    "start": "npm run start -w server"
+    "start": "npm run start -w server",
+    "worker": "npm run start -w worker",
+    "typecheck": "npm run typecheck --workspaces --if-present"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"
