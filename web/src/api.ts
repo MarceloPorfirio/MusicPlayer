@@ -77,6 +77,8 @@ export const api = {
   deletePlaylist: (id: number) => request<void>('DELETE', `/api/playlists/${id}`),
   addToPlaylist: (id: number, trackId: number) =>
     request<void>('POST', `/api/playlists/${id}/tracks`, { trackId }),
+  reorderPlaylist: (id: number, trackIds: number[]) =>
+    request<void>('PUT', `/api/playlists/${id}/tracks`, { trackIds }),
   removeFromPlaylist: (id: number, trackId: number) =>
     request<void>('DELETE', `/api/playlists/${id}/tracks/${trackId}`),
 };

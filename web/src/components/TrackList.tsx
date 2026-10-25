@@ -1,4 +1,23 @@
-import { useState } from 'react';
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type Over,
+} from '@dnd-kit/core';
+import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useState, type ReactNode } from 'react';
 import { formatTime, type Track } from '../api';
 import { useOffline } from '../offline';
 import { usePlayer } from '../player';
@@ -6,6 +25,7 @@ import { Cover } from './Cover';
 import { EditTrackDialog } from './EditTrackDialog';
 import {
   DownloadIcon,
+  DragIcon,
   EditIcon,
   MoreIcon,
   PauseIcon,
@@ -26,6 +46,8 @@ interface Props {
   onRemove: (track: Track) => void;
   removeLabel: string;
   onRetry?: (track: Track) => void;
+  /** Ativa arrastar para reordenar; recebe a lista na nova ordem. */
+  onReorder?: (tracks: Track[]) => void;
 }
 
 export function TrackList({
@@ -35,32 +57,24 @@ export function TrackList({
   onRemove,
   removeLabel,
   onRetry,
+  onReorder,
 }: Props) {
-  const { current, playing, playTracks, toggle, updateTrack } = usePlayer();
+  const { current, updateTrack } = usePlayer();
   const offline = useOffline();
   const [editing, setEditing] = useState<Track | null>(null);
   const [menuFor, setMenuFor] = useState<Track | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   if (!tracks.length) return <p className="empty">Nenhuma música aqui ainda.</p>;
 
-  function subtitle(t: Track) {
-    switch (t.status) {
-      case 'pending':
-        return 'Na fila…';
-      case 'downloading':
-        return `Baixando ${Math.round(t.progress ?? 0)}%`;
-      case 'error':
-        return <span className="error">Falhou: {t.error}</span>;
-      default:
-        return (
-          <>
-            {offline.saved.has(t.id) && <SavedIcon className="saved-icon" aria-label="No aparelho" />}
-            {offline.saving.has(t.id) && 'Salvando no aparelho… '}
-            {t.artist ?? 'Artista desconhecido'}
-          </>
-        );
-    }
-  }
+  const rowClass = (t: Track) =>
+    [current?.id === t.id && 'active', t.status === 'ready' && !offline.canPlay(t) && 'unavailable']
+      .filter(Boolean)
+      .join(' ') || undefined;
+  const rowProps = { tracks, rowClass, onRetry, onMenu: setMenuFor };
 
   return (
     <>
@@ -84,50 +98,149 @@ export function TrackList({
           removeLabel={removeLabel}
         />
       )}
-      <ul className="track-list">
-        {tracks.map((t) => {
-          const playable = offline.canPlay(t);
-          const isCurrent = current?.id === t.id;
-          const classes = [isCurrent && 'active', t.status === 'ready' && !playable && 'unavailable'];
-          return (
-            <li key={t.id} className={classes.filter(Boolean).join(' ') || undefined}>
-              <button
-                className="track-main"
-                disabled={!playable}
-                title={playable ? 'Tocar' : undefined}
-                onClick={() => (isCurrent ? toggle() : playTracks(tracks, t))}
-              >
-                <span className="cover-wrap">
-                  <Cover trackId={t.hasCover ? t.id : null} />
-                  {playable && (
-                    <span className="cover-overlay">
-                      {isCurrent && playing ? <PauseIcon /> : <PlayIcon />}
-                    </span>
-                  )}
-                </span>
-                <span className="track-text">
-                  <span className="track-title">{t.title}</span>
-                  <span className="track-sub">{subtitle(t)}</span>
-                </span>
-                <span className="track-duration">{formatTime(t.duration)}</span>
-              </button>
-              {t.status === 'downloading' && (
-                <progress className="track-progress" max={100} value={t.progress ?? 0} />
-              )}
-              <div className="track-actions">
-                {t.status === 'error' && onRetry && (
-                  <button className="icon-btn" title="Tentar de novo" onClick={() => onRetry(t)}>
-                    <RetryIcon />
-                  </button>
-                )}
-                <button className="icon-btn" title="Mais opções" onClick={() => setMenuFor(t)}>
-                  <MoreIcon />
-                </button>
-              </div>
+      {onReorder ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          accessibility={{ announcements, screenReaderInstructions }}
+          onDragEnd={({ active, over }) => {
+            if (!over || active.id === over.id) return;
+            const from = tracks.findIndex((t) => t.id === active.id);
+            const to = tracks.findIndex((t) => t.id === over.id);
+            onReorder(arrayMove(tracks, from, to));
+          }}
+        >
+          <SortableContext items={tracks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+            <ul className="track-list">
+              {tracks.map((t) => (
+                <SortableRow key={t.id} track={t} {...rowProps} />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
+      ) : (
+        <ul className="track-list">
+          {tracks.map((t) => (
+            <li key={t.id} className={rowClass(t)}>
+              <RowBody track={t} {...rowProps} />
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+// Avisos de leitor de tela do arrastar, em português.
+const screenReaderInstructions = {
+  draggable:
+    'Para reordenar, pressione espaço ou enter, use as setas para mover e espaço ou enter para soltar. Esc cancela.',
+};
+const position = (over: Over | null) => {
+  const index = over?.data.current?.sortable?.index;
+  return typeof index === 'number' ? `posição ${index + 1}` : 'fora da lista';
+};
+const announcements: Announcements = {
+  onDragStart: () => 'Música selecionada para mover.',
+  onDragOver: ({ over }) => `Movendo para a ${position(over)}.`,
+  onDragEnd: ({ over }) => `Música solta na ${position(over)}.`,
+  onDragCancel: () => 'Movimento cancelado.',
+};
+
+interface RowProps {
+  track: Track;
+  tracks: Track[];
+  rowClass: (track: Track) => string | undefined;
+  onRetry?: (track: Track) => void;
+  onMenu: (track: Track) => void;
+}
+
+function SortableRow({ track, rowClass, ...rest }: RowProps) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id: track.id });
+  return (
+    <li
+      ref={setNodeRef}
+      className={[rowClass(track), isDragging && 'dragging'].filter(Boolean).join(' ') || undefined}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+    >
+      <button
+        ref={setActivatorNodeRef}
+        className="icon-btn drag-handle"
+        aria-label={`Arrastar "${track.title}"`}
+        {...attributes}
+        {...listeners}
+      >
+        <DragIcon />
+      </button>
+      <RowBody track={track} rowClass={rowClass} {...rest} />
+    </li>
+  );
+}
+
+function RowBody({ track: t, tracks, onRetry, onMenu }: RowProps) {
+  const { current, playing, playTracks, toggle } = usePlayer();
+  const offline = useOffline();
+  const playable = offline.canPlay(t);
+  const isCurrent = current?.id === t.id;
+
+  let subtitle: ReactNode;
+  switch (t.status) {
+    case 'pending':
+      subtitle = 'Na fila…';
+      break;
+    case 'downloading':
+      subtitle = `Baixando ${Math.round(t.progress ?? 0)}%`;
+      break;
+    case 'error':
+      subtitle = <span className="error">Falhou: {t.error}</span>;
+      break;
+    default:
+      subtitle = (
+        <>
+          {offline.saved.has(t.id) && <SavedIcon className="saved-icon" aria-label="No aparelho" />}
+          {offline.saving.has(t.id) && 'Salvando no aparelho… '}
+          {t.artist ?? 'Artista desconhecido'}
+        </>
+      );
+  }
+
+  return (
+    <>
+      <button
+        className="track-main"
+        disabled={!playable}
+        title={playable ? 'Tocar' : undefined}
+        onClick={() => (isCurrent ? toggle() : playTracks(tracks, t))}
+      >
+        <span className="cover-wrap">
+          <Cover trackId={t.hasCover ? t.id : null} />
+          {playable && (
+            <span className="cover-overlay">
+              {isCurrent && playing ? <PauseIcon /> : <PlayIcon />}
+            </span>
+          )}
+        </span>
+        <span className="track-text">
+          <span className="track-title">{t.title}</span>
+          <span className="track-sub">{subtitle}</span>
+        </span>
+        <span className="track-duration">{formatTime(t.duration)}</span>
+      </button>
+      {t.status === 'downloading' && (
+        <progress className="track-progress" max={100} value={t.progress ?? 0} />
+      )}
+      <div className="track-actions">
+        {t.status === 'error' && onRetry && (
+          <button className="icon-btn" title="Tentar de novo" onClick={() => onRetry(t)}>
+            <RetryIcon />
+          </button>
+        )}
+        <button className="icon-btn" title="Mais opções" onClick={() => onMenu(t)}>
+          <MoreIcon />
+        </button>
+      </div>
     </>
   );
 }

@@ -385,6 +385,14 @@ li.active .cover-overlay { opacity: 1; }
 .menu-list .danger, .menu-list .danger svg { color: var(--danger); }
 
 .track-list li.unavailable { opacity: 0.4; }
+
+.drag-handle { width: 32px; cursor: grab; touch-action: none; flex-shrink: 0; }
+.drag-handle:active { cursor: grabbing; }
+.track-list li.dragging {
+  z-index: 5;
+  background: var(--surface-2);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.4);
+}
 .saved-icon {
   width: 14px;
   height: 14px;

@@ -98,6 +98,15 @@ export function PlaylistView({ id, onBack, onChanged }: Props) {
       <TrackList
         tracks={playlist.tracks}
         removeLabel="Remover da playlist"
+        onReorder={async (tracks) => {
+          setPlaylist({ ...playlist, tracks }); // otimista: a lista já aparece na nova ordem
+          try {
+            await api.reorderPlaylist(id, tracks.map((t) => t.id));
+          } catch (err) {
+            alert((err as Error).message);
+            await load();
+          }
+        }}
         onEdited={() => {
           void load();
           onChanged();
