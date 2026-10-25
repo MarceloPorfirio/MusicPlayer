@@ -84,10 +84,26 @@ jobs:
         id: pedido
         # POST, não GET: o endpoint responde 405 no verbo antigo.
         run: |
-          resposta=$(curl -sS --fail-with-body -X POST \
+          if [ -z "${{ secrets.COOLIFY_TOKEN }}" ]; then
+            echo "::error::Secret COOLIFY_TOKEN não configurado"
+            exit 1
+          fi
+          codigo=$(curl -sS -o resposta.json -w '%{http_code}' -X POST \
             -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
             "${{ vars.COOLIFY_URL }}/api/v1/deploy?uuid=${{ vars.COOLIFY_APP_UUID }}&force=false")
-          echo "$resposta"
+          resposta=$(cat resposta.json)
+          echo "HTTP $codigo: $resposta"
+          # Anotação com o motivo: aparece no resumo do run sem precisar abrir o log.
+          if [ "$codigo" != "200" ]; then
+            case "$codigo" in
+              401) dica="token recusado: confira o secret COOLIFY_TOKEN (completo, sem espaços)" ;;
+              403) dica="token sem permissão: precisa de deploy (e read para acompanhar)" ;;
+              404) dica="recurso não encontrado: confira a variable COOLIFY_APP_UUID" ;;
+              *) dica="resposta inesperada do Coolify" ;;
+            esac
+            echo "::error::Coolify respondeu HTTP $codigo ($dica): ${resposta:0:300}"
+            exit 1
+          fi
 
           uuid=$(echo "$resposta" | jq -r '.deployments[0].deployment_uuid // empty')
           if [ -z "$uuid" ]; then
