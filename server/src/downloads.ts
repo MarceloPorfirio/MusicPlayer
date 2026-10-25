@@ -3,10 +3,10 @@ import path from 'node:path';
 import { DOWNLOAD_CONCURRENCY, DOWNLOAD_MODE, MEDIA_DIR } from './config.js';
 import { db, type TrackRow } from './db.js';
 import { notifyWorker } from './jobs.js';
-import { downloadAudio } from './ytdlp.js';
+import { downloadAudio, type DownloadStage } from './ytdlp.js';
 
-/** Progresso em memória (0-100) dos downloads em andamento, por id da faixa. */
-export const progress = new Map<number, number>();
+/** Progresso em memória dos downloads em andamento, por id da faixa (percentual geral 0–100). */
+export const progress = new Map<number, { stage: DownloadStage; percent: number }>();
 
 const queue: number[] = [];
 let active = 0;
@@ -41,10 +41,10 @@ async function download(id: number) {
   if (!track) return;
 
   db.prepare("UPDATE tracks SET status = 'downloading', error = NULL WHERE id = ?").run(id);
-  progress.set(id, 0);
+  progress.set(id, { stage: 'preparing', percent: 0 });
   try {
-    const { file, cover } = await downloadAudio(track.source_url, `track-${id}`, (p) =>
-      progress.set(id, p),
+    const { file, cover } = await downloadAudio(track.source_url, `track-${id}`, (stage, percent) =>
+      progress.set(id, { stage, percent }),
     );
     const hasCover = existsSync(path.join(MEDIA_DIR, cover));
     db.prepare("UPDATE tracks SET status = 'ready', normalized = 1, file = ?, cover = ? WHERE id = ?").run(

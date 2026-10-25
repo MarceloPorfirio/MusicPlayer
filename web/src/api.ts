@@ -8,7 +8,9 @@ export interface Track {
   duration: number | null;
   status: TrackStatus;
   error: string | null;
+  /** Percentual geral do download (0–100), enquanto baixa. */
   progress: number | null;
+  stage: 'preparing' | 'downloading' | 'processing' | 'normalizing' | 'uploading' | null;
   hasCover: boolean;
   favorite: boolean;
   sourceUrl: string;

@@ -13,7 +13,9 @@ export function toTrack(row: TrackRow) {
     duration: row.duration,
     status: row.status,
     error: row.error,
-    progress: progress.get(row.id) ?? null,
+    // Percentual geral do download (0–100) e a etapa em andamento.
+    progress: progress.get(row.id)?.percent ?? null,
+    stage: progress.get(row.id)?.stage ?? null,
     hasCover: row.cover !== null,
     favorite: Boolean(row.favorite),
     sourceUrl: row.source_url,

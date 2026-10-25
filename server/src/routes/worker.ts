@@ -7,7 +7,13 @@ import { db, type ImportRow, type TrackRow } from '../db.js';
 import { progress } from '../downloads.js';
 import { waitForJob } from '../jobs.js';
 import { getTrack, importInfo } from '../library.js';
-import { trimInfo, type MediaInfo, type SearchResult } from '../ytdlp.js';
+import {
+  overallPercent,
+  trimInfo,
+  type DownloadStage,
+  type MediaInfo,
+  type SearchResult,
+} from '../ytdlp.js';
 
 /** Última vez que o worker falou com o servidor (ms). */
 let lastSeen = 0;
@@ -142,12 +148,20 @@ export async function workerRoutes(app: FastifyInstance) {
       return reply.code(204).send();
     });
 
-    w.post<IdParams & { Body: { percent?: number } }>(
+    w.post<IdParams & { Body: { percent?: number; stage?: DownloadStage } }>(
       '/api/worker/tracks/:id/progress',
       async (req, reply) => {
         // Um aviso de progresso atrasado pode chegar depois do áudio: só vale durante o download.
         const track = getTrack(Number(req.params.id));
-        if (track?.status === 'downloading') progress.set(track.id, Number(req.body?.percent) || 0);
+        if (track?.status === 'downloading') {
+          const percent = Number(req.body?.percent) || 0;
+          const stage = req.body?.stage;
+          progress.set(
+            track.id,
+            // Worker antigo manda só o percentual do yt-dlp, sem etapa.
+            stage ? { stage, percent } : { stage: 'downloading', percent: overallPercent('downloading', percent / 100) },
+          );
+        }
         return reply.code(204).send();
       },
     );
@@ -222,7 +236,7 @@ function nextJob(capabilities: Set<string>): Job | null {
     db.prepare(
       "UPDATE tracks SET status = 'downloading', error = NULL, claimed_at = datetime('now') WHERE id = ?",
     ).run(track.id);
-    progress.set(track.id, 0);
+    progress.set(track.id, { stage: 'preparing', percent: 0 });
     return { type: 'track', id: track.id, url: track.source_url };
   }
 

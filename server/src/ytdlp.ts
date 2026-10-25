@@ -140,13 +140,36 @@ export async function searchYoutube(query: string, limit = 10): Promise<SearchRe
     }));
 }
 
-/** Baixa só o áudio como .m4a + capa .jpg em <outDir>/<basename>.* */
+export type DownloadStage = 'preparing' | 'downloading' | 'processing' | 'normalizing' | 'uploading';
+
+/**
+ * Fatia da barra de progresso (0–100) de cada etapa. O download em si costuma levar 1–2 s;
+ * o que demora é preparar (yt-dlp consulta o YouTube) e ajustar o volume.
+ */
+const STAGE_RANGE: Record<DownloadStage, [number, number]> = {
+  preparing: [0, 5],
+  downloading: [5, 50],
+  processing: [50, 55],
+  normalizing: [55, 95],
+  uploading: [95, 100],
+};
+
+/** Percentual geral (0–100) a partir da etapa e do quanto dela já foi feito (0–1). */
+export function overallPercent(stage: DownloadStage, fraction = 0) {
+  const [from, to] = STAGE_RANGE[stage];
+  return from + (to - from) * Math.min(1, Math.max(0, fraction));
+}
+
+export type ProgressFn = (stage: DownloadStage, percent: number) => void;
+
+/** Baixa só o áudio como .m4a + capa .jpg em <outDir>/<basename>.*, já com o volume normalizado. */
 export async function downloadAudio(
   url: string,
   basename: string,
-  onProgress: (percent: number) => void,
+  onProgress: ProgressFn,
   outDir = MEDIA_DIR,
 ): Promise<{ file: string; cover: string }> {
+  onProgress('preparing', overallPercent('preparing'));
   await run(
     [
       '--no-playlist',
@@ -161,12 +184,19 @@ export async function downloadAudio(
       '-o', `${basename}.%(ext)s`,
       url,
     ],
-    (line) => {
-      const match = line.match(/([\d.]+)%/);
-      if (match) onProgress(Number(match[1]));
+    (raw) => {
+      const line = raw.replace(/\x1b\[[\d;]*m/g, ''); // sem códigos de cor ANSI
+      const match = line.match(/^download:\s*([\d.]+)%/);
+      if (match) onProgress('downloading', overallPercent('downloading', Number(match[1]) / 100));
+      // Pós-processamento do yt-dlp: extrair o áudio, gravar metadados, converter a capa.
+      else if (/^\[(ExtractAudio|Metadata|ThumbnailsConvertor|FixupM4a)\]/.test(line)) {
+        onProgress('processing', overallPercent('processing', 0.5));
+      }
     },
   );
-  await normalizeLoudness(path.join(outDir, `${basename}.m4a`));
+  await normalizeLoudness(path.join(outDir, `${basename}.m4a`), (fraction) =>
+    onProgress('normalizing', overallPercent('normalizing', fraction)),
+  );
   return { file: `${basename}.m4a`, cover: `${basename}.jpg` };
 }
 

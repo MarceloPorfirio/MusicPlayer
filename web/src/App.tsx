@@ -106,17 +106,25 @@ export function App({ onLogout }: { onLogout?: () => void }) {
     return () => window.removeEventListener(FAVORITES_CHANGED, onFavorites);
   }, [loadTracks, loadPlaylists]);
 
-  // Enquanto houver downloads ou URLs em andamento, atualiza a lista periodicamente.
-  // Com o PC desconectado não há progresso a mostrar: só confere de vez em quando.
+  // Enquanto houver downloads ou URLs em andamento, atualiza a lista periodicamente:
+  // a cada segundo com o PC baixando (a barra anda), a cada 3 s esperando o PC ligar
+  // (para perceber logo que ele voltou, sem precisar recarregar a página).
   const busy =
     tracks.some((t) => t.status === 'pending' || t.status === 'downloading') ||
     imports.some((i) => i.status !== 'error');
   const waitingForPc = status?.downloadMode === 'worker' && !status.worker.online;
   useEffect(() => {
     if (!busy) return;
-    const timer = setInterval(loadTracks, waitingForPc ? 10_000 : 1500);
+    const timer = setInterval(loadTracks, waitingForPc ? 3000 : 1000);
     return () => clearInterval(timer);
   }, [busy, waitingForPc, loadTracks]);
+
+  // Voltando para o app (celular desbloqueado, outra aba): atualiza na hora.
+  useEffect(() => {
+    const onVisible = () => document.visibilityState === 'visible' && void loadTracks();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [loadTracks]);
 
   const q = query.trim().toLowerCase();
   const artists = useMemo(() => groupByArtist(tracks), [tracks]);

@@ -219,13 +219,20 @@ li.active .cover-overlay { opacity: 1; }
   right: 8px;
   bottom: 2px;
   height: 3px;
-  appearance: none;
-  border: none;
+  overflow: hidden;
+  border-radius: 2px;
   background: var(--surface-2);
 }
-.track-progress::-webkit-progress-bar { background: var(--surface-2); }
-.track-progress::-webkit-progress-value { background: var(--accent); }
-.track-progress::-moz-progress-bar { background: var(--accent); }
+/* Desliza entre uma atualização e outra em vez de pular. */
+.track-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.9s linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .track-progress > span { transition: none; }
+}
 
 .playlist-grid {
   list-style: none;

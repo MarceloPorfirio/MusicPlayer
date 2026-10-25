@@ -4,7 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { normalizeLoudness } from '../../server/src/loudness.js';
-import { downloadAudio, fetchInfo, searchYoutube, trimInfo } from '../../server/src/ytdlp.js';
+import {
+  downloadAudio,
+  fetchInfo,
+  overallPercent,
+  searchYoutube,
+  trimInfo,
+  type DownloadStage,
+} from '../../server/src/ytdlp.js';
 
 const SERVER_URL = process.env.SERVER_URL?.replace(/\/$/, '');
 const TOKEN = process.env.WORKER_TOKEN;
@@ -95,19 +102,25 @@ async function handleImport(job: UrlJob) {
 async function handleTrack(job: UrlJob) {
   log(`Baixando faixa ${job.id}: ${job.url}`);
   const dir = await mkdtemp(path.join(os.tmpdir(), 'musicplayer-worker-'));
-  // Manda o percentual mais recente a cada segundo (o yt-dlp emite muitas linhas por segundo,
-  // e mandar só a primeira de cada janela deixava o app parado em 0%).
-  let latest: number | null = null;
-  const reporter = setInterval(() => {
-    if (latest === null) return;
-    const percent = latest;
+  // Manda a etapa e o percentual mais recentes a cada meio segundo (o yt-dlp e o ffmpeg emitem
+  // muitas linhas por segundo; mandar cada uma inundaria o servidor).
+  let latest: { stage: DownloadStage; percent: number } | null = null;
+  const report = () => {
+    if (!latest) return;
+    const body = latest;
     latest = null;
-    api('POST', `/api/worker/tracks/${job.id}/progress`, { percent }).catch(() => {});
-  }, 1000);
+    return api('POST', `/api/worker/tracks/${job.id}/progress`, body).catch(() => {});
+  };
+  const reporter = setInterval(report, 500);
   try {
     let files;
     try {
-      files = await downloadAudio(job.url, `track-${job.id}`, (percent) => (latest = percent), dir);
+      files = await downloadAudio(
+        job.url,
+        `track-${job.id}`,
+        (stage, percent) => (latest = { stage, percent }),
+        dir,
+      );
     } catch (err) {
       log(`  falhou: ${(err as Error).message}`);
       await withRetry('aviso de erro', () =>
@@ -115,6 +128,9 @@ async function handleTrack(job: UrlJob) {
       );
       return;
     }
+
+    latest = { stage: 'uploading', percent: overallPercent('uploading') };
+    await report();
 
     const coverPath = path.join(dir, files.cover);
     if (existsSync(coverPath)) {

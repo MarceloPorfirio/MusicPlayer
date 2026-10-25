@@ -153,6 +153,14 @@ const announcements: Announcements = {
   onDragCancel: () => 'Movimento cancelado.',
 };
 
+const STAGE_LABEL: Record<NonNullable<Track['stage']>, string> = {
+  preparing: 'Preparando…',
+  downloading: 'Baixando',
+  processing: 'Convertendo…',
+  normalizing: 'Ajustando volume…',
+  uploading: 'Enviando…',
+};
+
 interface RowProps {
   track: Track;
   tracks: Track[];
@@ -207,7 +215,9 @@ function RowBody({ track: t, tracks, onRetry, onMenu }: RowProps) {
       subtitle = pendingLabel(status);
       break;
     case 'downloading':
-      subtitle = stalled ? pendingLabel(status) : `Baixando ${Math.round(t.progress ?? 0)}%`;
+      subtitle = stalled
+        ? pendingLabel(status)
+        : `${STAGE_LABEL[t.stage ?? 'downloading']} ${Math.round(t.progress ?? 0)}%`;
       break;
     case 'error':
       subtitle = <span className="error">Falhou: {t.error}</span>;
@@ -252,7 +262,15 @@ function RowBody({ track: t, tracks, onRetry, onMenu }: RowProps) {
         <span className="track-duration">{formatTime(t.duration)}</span>
       </button>
       {t.status === 'downloading' && !stalled && (
-        <progress className="track-progress" max={100} value={t.progress ?? 0} />
+        <span
+          className="track-progress"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(t.progress ?? 0)}
+        >
+          <span style={{ width: `${t.progress ?? 0}%` }} />
+        </span>
       )}
       <div className="track-actions">
         {t.status === 'error' && onRetry && (
